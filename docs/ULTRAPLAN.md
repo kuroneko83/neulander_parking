@@ -7,7 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** —
+- **Última tarefa concluída:** 0.1 — Monorepo pnpm + Turborepo, `packages/config`, `.env.example` (`4af88e9`)
 - **Bloqueios / notas:** —
 
 ## Visão geral das fases
@@ -34,7 +34,7 @@
 
 Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar com banco local.
 
-- [ ] **0.1** Monorepo pnpm + Turborepo, `packages/config` (tsconfig base strict, eslint flat config, prettier), `.nvmrc` (Node 22), `.editorconfig`, `.env.example` — `devops-engineer`
+- [x] **0.1** Monorepo pnpm + Turborepo, `packages/config` (tsconfig base strict, eslint flat config, prettier), `.nvmrc` (Node 22), `.editorconfig`, `.env.example` — `devops-engineer` (`4af88e9`)
   - Aceite: `pnpm lint`, `pnpm typecheck`, `pnpm test` rodam na raiz (mesmo sem código).
 - [ ] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, `minio` (imagens LPR/relatórios); healthchecks; volume nomeado — `devops-engineer`
 - [ ] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer`
