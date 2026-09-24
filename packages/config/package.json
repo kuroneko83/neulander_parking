@@ -1,0 +1,34 @@
+{
+  "name": "@neulander/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Configs compartilhados do monorepo: tsconfig base, ESLint flat config, Prettier — ver ADR-0002.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./eslint": "./eslint.config.js",
+    "./prettier": "./prettier.config.js",
+    "./tsconfig/base.json": "./tsconfig.base.json",
+    "./tsconfig/node.json": "./tsconfig.node.json",
+    "./tsconfig/library.json": "./tsconfig.library.json"
+  },
+  "files": [
+    "dist",
+    "eslint.config.js",
+    "prettier.config.js",
+    "tsconfig.base.json",
+    "tsconfig.node.json",
+    "tsconfig.library.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

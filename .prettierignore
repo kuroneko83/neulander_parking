@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+pnpm-workspace.yaml
+.turbo
+dist
+coverage
+node_modules
+
+# Prose maintained by hand; not part of this task's scope.
+docs/
+CLAUDE.md
+README.md
+.claude/
