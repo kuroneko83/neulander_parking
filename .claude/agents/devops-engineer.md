@@ -27,6 +27,12 @@ You own tooling, delivery and infrastructure for **Neulander Parking**. Read ADR
 - Always run `terraform fmt`, `terraform validate`, and `tflint`; show `plan` summaries, **never `apply` without explicit user confirmation**.
 - Keep a cost note in `infra/terraform/README.md` (estimated monthly cost per env + how to scale to zero for demos).
 
+## Edge agent (`apps/edge-agent`)
+- CI job: `uv sync`, ruff, mypy, pytest, contract staleness check (JSON Schema from Zod → Pydantic).
+- Multi-arch image (amd64 + arm64) with `docker buildx`, published to GHCR/ECR with semver tags; runs as non-root; `restart: unless-stopped`.
+- Deployment doc for the lot's mini PC: docker compose file, NTP check, where the SQLite volume lives, how to update the image.
+- S3 bucket for plate images: private, SSE, lifecycle expiration, presigned PUT only for the device's prefix.
+
 ## Observability
 `nestjs-pino` JSON logs with redaction, OpenTelemetry traces/metrics (OTLP), Sentry DSNs via env, dashboards and alerts for 5xx rate, queue lag, webhook failures.
 

@@ -28,8 +28,18 @@
 | Gestor | `manager` | Configura estacionamento, preços, mensalistas; vê relatórios |
 | Proprietário | `owner` | Gestor com poder sobre membros e dados da organização |
 | Motorista | `driver` | Usuário do app mobile |
-| Cancela | `GateDevice` | Barreira física de entrada/saída (pós-MVP) |
-| Leitura de placa (LPR/OCR) | `PlateRead` | Evento de câmera que reconhece a placa |
+| Cancela | `Device` (`kind = gate`) | Barreira física de entrada/saída (Fase 12) |
+| Leitura de placa (LPR/OCR) | `PlateRead` | Uma passagem de veículo reconhecida pela câmera: placa, horário, direção, confiança |
+| Câmera / Dispositivo | `Device` | Câmera cadastrada no estacionamento, com sua chave de acesso |
+| Agente de borda | `edge-agent` | Software no mini PC do estacionamento que lê a câmera e envia as leituras |
+| Câmera ANPR | `source = anpr_push` | Câmera que já reconhece a placa sozinha e envia o resultado |
+| Modo de envio | `uploadMode` (`realtime` / `end_of_day`) | Enviar leituras na hora ou em lote no fechamento do dia |
+| Fila de revisão | `PlateReadStatus.needs_review` | Leituras duvidosas que um operador precisa confirmar/corrigir |
+| Pareamento | `PlateMatcher` | Ligar a leitura de saída à entrada do mesmo veículo |
+| Horário de corte / Fechamento | `businessDayCutoff` | Hora em que o dia operacional fecha e o relatório é gerado |
+| Relatório diário | `DailyReport` | Resumo do dia enviado ao dono (entradas/saídas por placa, permanência, faturamento, exceções) |
+| Modo LPR | `lprMode` (`off` / `record_only` / `enforced`) | Se a câmera só registra ou também exige pagamento para a saída ser regular |
+| Saída sem pagamento | `settlementStatus.unpaid_exit` | Veículo saiu (lido pela câmera) sem sessão paga |
 | Placa Mercosul | `ABC1D23` | Formato atual; antigo `ABC1234`. Ambos via `normalizePlate()` |
 | Pix copia e cola | `pix.copyPaste` | Código EMV do Pix |
 | Estorno | `Refund` | Devolução parcial/total de pagamento |

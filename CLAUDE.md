@@ -1,6 +1,7 @@
 # CLAUDE.md — Neulander Parking
 
-Plataforma de estacionamentos: **painel web** para operadores/gestores (entrada/saída, tarifas,
+Plataforma de estacionamentos: **câmera com leitura de placa (LPR)** que registra a hora de entrada e saída de cada
+carro e gera um **relatório diário para o dono** + **painel web** para operadores/gestores (entrada/saída, tarifas,
 mensalistas, relatórios) + **app mobile** para motoristas (buscar vagas, reservar, pagar, ticket digital).
 Projeto de portfólio fullstack — qualidade de código, testes e documentação importam tanto quanto features.
 
@@ -22,6 +23,7 @@ Projeto de portfólio fullstack — qualidade de código, testes e documentaçã
 - **API:** NestJS 10 (monólito modular) · Drizzle ORM · PostgreSQL 16 + PostGIS · Redis 7 · BullMQ · Socket.IO
 - **Web:** React 18 + Vite · **MUI v5** · TanStack Query · React Router · React Hook Form + Zod
 - **Mobile:** Expo (React Native) + expo-router · React Native Paper · react-native-maps
+- **Agente de borda LPR (única parte em Python):** Python 3.12 + uv · OpenCV · ONNX Runtime · SQLite · Pydantic (gerado dos contratos) — ADR-0011
 - **Compartilhado:** `packages/contracts` (Zod), `packages/pricing` (motor de tarifa puro)
 - **Testes:** Vitest · Supertest + Testcontainers · Playwright (web) · Maestro (mobile, opcional)
 - **Infra:** Docker Compose (local) · AWS ECS Fargate + RDS + ElastiCache via Terraform · GitHub Actions
@@ -32,6 +34,7 @@ Projeto de portfólio fullstack — qualidade de código, testes e documentaçã
 apps/api        NestJS — REST /v1, WebSocket, worker (main.worker.ts)
 apps/web        Painel operador/gestor/admin (React + MUI)
 apps/mobile     App do motorista (Expo)
+apps/edge-agent Agente de borda Python: câmera → leitura de placa → envio (tempo real ou fim do dia)
 packages/contracts   Schemas Zod, tipos, eventos de domínio — fonte única de verdade
 packages/pricing     Motor de tarifação (funções puras, 100% testado)
 packages/api-client  Cliente HTTP tipado + hooks TanStack Query
@@ -54,6 +57,9 @@ pnpm test:int --filter api   # integração (Testcontainers, precisa de Docker)
 pnpm test:e2e --filter web   # Playwright
 pnpm db:generate --filter api   # gera migration a partir do schema Drizzle
 pnpm db:migrate --filter api
+pnpm contracts:jsonschema        # regenera JSON Schema → modelos Pydantic do edge-agent
+cd apps/edge-agent && uv run pytest && uv run ruff check && uv run mypy
+cd apps/edge-agent && uv run python -m edge_agent --source simulator --dataset eval/samples   # sem câmera
 ```
 
 ## Regras de arquitetura (não negociáveis)
@@ -75,6 +81,10 @@ pnpm db:migrate --filter api
    Transição inválida lança `DomainError`, nunca atualiza status "na mão".
 9. **Multi-tenant:** toda query de dados operacionais filtra por `organization_id`. Guard de RBAC em todo controller.
 10. **LGPD:** placa, CPF, e-mail e telefone são dados pessoais — não logar em claro; usar `maskPlate()` etc.
+    Imagens de câmera: só recortes, bucket privado, retenção com expurgo, acesso auditado.
+11. **Leituras de câmera (LPR):** o horário que vale é o `captured_at` da borda; ingestão idempotente pelo ID gerado na borda;
+    pareamento processado em ordem de `captured_at` por estacionamento, para que tempo real e lote do fim do dia deem o
+    mesmo resultado (ADR-0012). Saída lida pela câmera nunca é recusada — vira exceção se não estiver paga.
 
 ## Convenções de código
 
@@ -109,18 +119,20 @@ Use o skill `/next-task` para pegar a próxima tarefa do ULTRAPLAN. Delegue ao s
 | `payments-engineer` | Pagamentos, Pix/cartão, webhooks, conciliação, idempotência |
 | `web-engineer` | Painel React + MUI v5 |
 | `mobile-engineer` | App Expo do motorista |
+| `vision-engineer` | Agente de borda Python: câmera, reconhecimento de placa, store-and-forward, upload |
 | `qa-engineer` | Estratégia e escrita de testes, e2e, testes de carga |
 | `devops-engineer` | Docker, CI/CD, Terraform/AWS, observabilidade |
 | `security-reviewer` | Revisão de auth, RBAC, OWASP, LGPD (somente leitura) |
 | `code-reviewer` | Revisão de diff antes de commit (somente leitura) |
 
 Regras: tarefas que cruzam API + UI começam por `contracts` → API → UI. Antes de commitar mudanças em
-auth/pagamentos, rode `security-reviewer`. Antes de fechar uma fase, rode `code-reviewer` no diff da fase.
+auth/pagamentos/autenticação de dispositivos/imagens, rode `security-reviewer`. Antes de fechar uma fase, rode `code-reviewer` no diff da fase.
 
 ## Não faça
 
 - Não adicione dependência sem justificar no PR/commit (e ADR se for estrutural).
 - Não altere migration já aplicada — crie uma nova.
 - Não mocke o banco em teste de integração; use Testcontainers.
+- Não edite à mão os modelos Pydantic em `apps/edge-agent/src/edge_agent/contracts/` — são gerados.
 - Não coloque segredo em código; use `.env` (há `.env.example`) e Secrets Manager em produção.
 - Não pule fases do ULTRAPLAN sem registrar o motivo no próprio arquivo.

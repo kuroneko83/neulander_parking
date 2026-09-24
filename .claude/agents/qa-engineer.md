@@ -21,6 +21,8 @@ You own test quality for **Neulander Parking**. Strategy is in `docs/architectur
 - **Payments:** webhook duplicate/out-of-order/lost scenarios with `FakeProvider`.
 - **Realtime:** two Socket.IO clients, assert delivery < 2 s and room authorization.
 - **E2E web:** Playwright with seeded data, `data-testid` only where accessible roles/labels are insufficient.
+- **LPR:** replay a full simulated day through the edge agent in `end_of_day` and in `realtime` → identical daily report vs. a golden file;
+  duplicate/late/out-of-order batches; network drop mid-upload (no loss, no duplicates); matcher scenarios (confusable characters, missing entry/exit, midnight rollover).
 - **Load:** k6 scripts in `tests/load/` with thresholds matching the NFRs (p95 < 200 ms reads / < 400 ms writes).
 
 ## Output

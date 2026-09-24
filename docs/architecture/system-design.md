@@ -11,14 +11,17 @@ Plataforma SaaS multi-tenant para estacionamentos privados (shoppings, prédios 
 | **Motorista** (`driver`) | App mobile | Encontrar estacionamento com vaga perto, ver preço, reservar, pagar sem fila, ticket digital (QR), histórico/recibos |
 | **Operador** (`operator`) | Painel web (tablet na cancela/guichê) | Registrar entrada/saída por placa ou QR, cobrar, emitir ticket, ver ocupação |
 | **Gestor** (`manager`) | Painel web | Cadastrar estacionamento, setores, vagas, tabelas de preço, mensalistas, relatórios de faturamento/ocupação |
+| **Dono do estacionamento** (`owner`) | E-mail + painel web | Receber o **relatório diário** automático (entradas/saídas por placa, permanência, faturamento estimado, exceções) sem precisar estar no local |
 | **Admin da plataforma** (`platform_admin`) | Painel web | Onboarding de organizações, suporte, métricas globais |
+| **Câmera + agente de borda** (dispositivo) | HTTPS (API de dispositivo) | Ler a placa de cada veículo na entrada/saída e enviar a leitura com horário, em tempo real ou em lote no fim do dia |
 
-### Escopo do MVP (Fases 0–7)
-Cadastro de estacionamentos/vagas, tabela de preços, entrada/saída pelo operador, cálculo de tarifa,
+### Escopo do MVP (Fases 0–8)
+Cadastro de estacionamentos/vagas, tabela de preços, entrada/saída pelo operador, **controle automático de
+entrada/saída por câmera com leitura de placa (LPR) e relatório diário para o dono**, cálculo de tarifa,
 pagamento (Pix + cartão + dinheiro), ocupação em tempo real, app do motorista com busca no mapa e pagamento de sessão.
 
-### Pós-MVP (Fases 8+)
-Reservas antecipadas, mensalistas, relatórios avançados, integração com cancelas (dispositivos), LPR (leitura de placa por câmera), sensores IoT.
+### Pós-MVP (Fases 9+)
+Reservas antecipadas, mensalistas, relatórios de período, abertura automática de cancela, sensores IoT.
 
 ## 2. Requisitos não funcionais
 
@@ -27,6 +30,8 @@ Reservas antecipadas, mensalistas, relatórios avançados, integração com canc
 | Disponibilidade | 99,5% (MVP) — operação de cancela precisa de modo degradado |
 | Latência API | p95 < 200 ms leitura, < 400 ms escrita (excluindo provedor de pagamento) |
 | Tempo real | Atualização de ocupação no painel/app em < 2 s |
+| LPR | Leitura → registro no servidor em < 3 s (modo `realtime`); acurácia por placa ≥ 95% de dia / ≥ 90% à noite; **zero perda de leitura** com a internet caída (store-and-forward) |
+| Relatório diário | Entregue até 2 h após o horário de corte do estacionamento, mesmo se uma câmera estiver offline (com aviso) |
 | Consistência | **Forte** para sessões, reservas e pagamentos (Postgres, transações). Eventual para relatórios e contadores de cache |
 | Segurança | OWASP ASVS L2, JWT curto + refresh rotativo, RBAC por organização, LGPD |
 | Observabilidade | Logs estruturados (pino) com `requestId`, traces OpenTelemetry, métricas RED, Sentry |
@@ -42,6 +47,11 @@ Cenário alvo de "sucesso": 500 estacionamentos × 200 vagas = **100 mil vagas**
 - Storage: sessão ≈ 1 KB → 300 MB/mês + pagamentos/eventos ≈ **< 10 GB/ano**. Particionar `parking_sessions` por mês a partir do 2º ano.
 - WebSocket: 1 conexão por painel (≈ 1–3 mil) + motoristas em sessão ativa (≈ 10 mil). Socket.IO com Redis adapter, 2–4 tasks.
 
+- LPR: ~600 passagens/dia/estacionamento (entradas + saídas) × 500 = **300 mil leituras/dia**. Lote de fim do dia:
+  500 estacionamentos enviando juntos ≈ 600 leituras cada → ingestão em lotes de 500 com fila, tranquilo.
+- Imagens LPR: 2 recortes (placa + veículo) ≈ 60 KB por leitura → **~18 GB/dia**; retenção de 30 dias ≈ 540 GB no S3
+  com lifecycle (expurgo automático). Sem vídeo contínuo no servidor.
+
 **Conclusão:** monólito modular + 1 Postgres primário (+ réplica de leitura depois) atende com folga. Microsserviços seriam custo sem benefício (ADR-0001).
 
 ## 4. Arquitetura — Contexto (C4 nível 1)
@@ -52,7 +62,9 @@ flowchart LR
   operator([Operador / Gestor]) -->|HTTPS / WSS| web[Painel Web\nReact + MUI]
   mobile --> api
   web --> api
-  gate[[Cancela / LPR\nfuturo]] -->|HTTPS + mTLS/API key| api
+  cam[[Câmera IP / ANPR\nna entrada/saída]] -->|RTSP ou evento HTTP| edge[Agente de borda\nPython · no estacionamento]
+  edge -->|HTTPS · API key + HMAC\ntempo real ou lote fim do dia| api
+  owner([Dono]) -->|e-mail com relatório diário| email
   api[Neulander API\nNestJS] --> psp[(Provedor de pagamento\nMercado Pago Pix · Stripe cartão)]
   psp -->|webhooks| api
   api --> email[(E-mail\nSES / Mailpit)]
@@ -68,6 +80,11 @@ flowchart TB
     web[apps/web]
     mobile[apps/mobile]
   end
+  subgraph Estacionamento[No estacionamento]
+    cam[Câmera IP / ANPR]
+    edge[apps/edge-agent\nPython · mini PC\nSQLite store-and-forward]
+    cam --> edge
+  end
   subgraph AWS
     alb[ALB + WAF]
     subgraph ECS Fargate
@@ -76,12 +93,14 @@ flowchart TB
     end
     rds[(RDS PostgreSQL 16\n+ PostGIS)]
     redis[(ElastiCache Redis 7\ncache · filas · WS adapter · locks)]
-    s3[(S3\nrecibos PDF · exports)]
+    s3[(S3\nimagens LPR · relatórios PDF/CSV · recibos)]
     cf[CloudFront\nweb estático]
   end
   web --> cf
   web --> alb
   mobile --> alb
+  edge --> alb
+  edge -->|imagens via URL pré-assinada| s3
   alb --> apiSvc
   apiSvc --> rds
   apiSvc --> redis
@@ -91,6 +110,8 @@ flowchart TB
 ```
 
 - **API e worker são o mesmo código** (`apps/api`), dois entrypoints. Escalam independente.
+- **Agente de borda** (`apps/edge-agent`) roda num mini PC no estacionamento, ao lado da câmera. É o único componente
+  em Python (ecossistema de visão computacional) e fala com a API só por HTTPS, com contratos gerados dos schemas Zod (ADR-0011).
 - **Web** é SPA estática (S3 + CloudFront). **Mobile** distribuído via Expo EAS.
 
 ## 6. Componentes — módulos da API (C4 nível 3)
@@ -106,10 +127,10 @@ Monólito modular; cada módulo é um *bounded context* com fronteira forçada p
 | `reservations` | Reserva antecipada com janela de tempo e no-show | `Reservation` | `ReservationConfirmed`, `ReservationExpired` |
 | `payments` | Intenções de pagamento, adapters PSP, webhooks, estornos, conciliação | `Payment`, `PaymentAttempt` | `PaymentSucceeded`, `PaymentFailed`, `PaymentRefunded` |
 | `subscriptions` | Mensalistas: planos, contratos, cobrança recorrente, placas autorizadas | `SubscriptionPlan`, `Subscription` | `SubscriptionActivated`, `SubscriptionPastDue` |
+| `lpr` | Câmeras/agentes de borda (cadastro, chave, heartbeat, config), ingestão de leituras, pareamento entrada↔saída, fila de revisão | `Device`, `PlateRead` | `PlateReadReceived`, `PlateReadMatched`, `ReviewRequired`, `DeviceOffline` |
 | `occupancy` | Contadores em tempo real, gateway WebSocket, cache de disponibilidade | (read model) | — consome eventos |
 | `notifications` | E-mail, push, templates | `Notification` | — consome eventos |
-| `reporting` | Read models de faturamento/ocupação, exports CSV/PDF | (projeções) | — consome eventos |
-| `devices` *(pós-MVP)* | Cancelas, câmeras LPR, sensores; autenticação por API key/mTLS | `GateDevice` | `PlateRead` |
+| `reporting` | **Relatório diário por estacionamento** (fechamento, PDF/CSV, envio por e-mail), read models de faturamento/ocupação, exports | `DailyReport` + projeções | `DailyReportReady` |
 | `shared` (kernel) | `DomainError`, `Clock`, `Money/Cents`, outbox, idempotência, auditoria | — | — |
 
 ### Estrutura interna de um módulo
@@ -159,14 +180,83 @@ retorno do cliente; somente webhook/consulta server-side muda status (ADR-0005).
 
 ### 7.6 Modo degradado da cancela
 Se a API estiver indisponível, o painel do operador mantém fila local (IndexedDB) de entradas/saídas com
-`Idempotency-Key` gerado no cliente e sincroniza ao reconectar. Conflitos resolvidos pelo servidor. (Fase 10.)
+`Idempotency-Key` gerado no cliente e sincroniza ao reconectar. Conflitos resolvidos pelo servidor. (Fase 11.)
+
+### 7.7 Câmera LPR e agente de borda
+
+**Por que um agente de borda e não mandar vídeo para a nuvem?** Vídeo contínuo custa banda e dinheiro, e cai junto com a
+internet do estacionamento. O agente processa localmente e envia só **leituras** (placa, horário, direção, confiança) +
+2 recortes JPEG. Com a internet caída, nada se perde: tudo fica no SQLite local até sincronizar (ADR-0011).
+
+**Fontes de imagem suportadas (adapters):**
+1. **Câmera com LPR embarcado (ANPR)** — ex.: Intelbras, Hikvision. A câmera já reconhece a placa e manda evento HTTP ao
+   agente; o agente só normaliza e encaminha. Caminho mais confiável para produção.
+2. **Câmera IP comum (RTSP)** — o agente roda o pipeline próprio de reconhecimento (abaixo). Mais barato, é o que torna o projeto interessante no portfólio.
+3. **Simulador** — lê pasta de imagens ou arquivo de vídeo com horários sintéticos. Permite desenvolver, testar e fazer demo sem câmera física.
+
+**Pipeline (fonte RTSP):**
+```mermaid
+flowchart LR
+  f[Frame RTSP\n5–10 fps] --> m{Movimento\nna ROI?}
+  m -- não --> f
+  m -- sim --> v[Detecção de veículo\nONNX]
+  v --> p[Detecção de placa\nONNX]
+  p --> o[OCR da placa\nMercosul / antiga]
+  o --> t[Rastreamento\ndireção + id do veículo]
+  t --> vt[Votação entre frames\nmelhor leitura + confiança]
+  vt --> db[(SQLite local\nleituras + recortes)]
+  db --> up[Uploader\nrealtime · end_of_day]
+```
+
+- **Direção:** faixa só de entrada / só de saída é configuração da câmera. Com **uma única câmera para entrada e saída**,
+  a direção vem do rastreamento (sentido do movimento cruzando uma linha virtual na imagem).
+- **Horário:** vale o `captured_at` do agente (relógio sincronizado por NTP), nunca o horário em que o servidor recebeu.
+  O heartbeat reporta o desvio do relógio; desvio > 30 s gera alerta.
+- **Modos de envio (por câmera):** `realtime` (envia em segundos, painel ao vivo) ou `end_of_day` (acumula e envia em lote
+  no horário de corte, para locais com internet ruim ou para economizar dados). Em ambos o agente reenvia até receber confirmação;
+  a ingestão é idempotente pelo `id` da leitura gerado na borda (ADR-0012).
+
+**Pareamento no servidor (`lpr` → `sessions`):** as leituras são processadas **em ordem de `captured_at` por estacionamento**,
+o que torna o resultado igual em tempo real ou em lote. Entrada abre sessão (`entry_channel = lpr`); saída procura a sessão
+aberta da mesma placa (exato → variações de caracteres confundíveis O/0, I/1, B/8…). Leituras com confiança baixa ou sem par vão
+para a **fila de revisão** no painel. Detalhes em `flows.md` §7–8.
+
+**Modos de operação do estacionamento (`parking_lots.lpr_mode`):**
+| Modo | Uso |
+|---|---|
+| `off` | Só operador manual |
+| `record_only` | Câmera **registra** entrada/saída e calcula o valor devido; cobrança continua com o operador. Ideal para o dono auditar o movimento real vs. o que foi cobrado |
+| `enforced` | Saída só é considerada regular se a sessão estiver paga; saída sem pagamento vira exceção no relatório (e, com cancela na Fase 12, bloqueia a saída) |
+
+**Hardware de referência:** mini PC x86 (Intel N100, 8 GB) roda 1–2 câmeras RTSP a 5 fps com modelos ONNX em CPU;
+para mais câmeras, Jetson Orin Nano. Câmera com lente adequada à faixa, iluminação IR para a noite, altura/ângulo conforme guia em `apps/edge-agent/README.md`.
+
+### 7.8 Relatório diário para o dono
+
+Job `daily-report` por estacionamento no **horário de corte** (`business_day_cutoff`, ex.: 23:59 no fuso do lot):
+1. Aguarda todas as câmeras do lot sincronizarem até o corte (`devices.last_synced_until ≥ corte`), no máximo 2 h.
+   Se alguma não sincronizar, gera assim mesmo e marca o aviso "câmera X sem dados desde HH:MM".
+2. Agrega: total de entradas/saídas, veículos por hora, pico de ocupação, permanência média/mediana, lista completa
+   (placa, entrada, saída, permanência, valor calculado, valor efetivamente pago), **veículos ainda dentro**, faturamento
+   calculado vs. recebido, e **exceções** (saída sem entrada, leitura corrigida manualmente, saída sem pagamento em `enforced`,
+   câmera offline).
+3. Gera PDF + CSV no S3, grava `daily_reports` e envia e-mail com resumo no corpo + links assinados para `report_recipients` (dono e gestores).
+4. Leitura atrasada que muda um dia já fechado → relatório marcado como "revisado" e reenviado (versão 2).
+
+Disponível também no painel (página "Relatórios diários") e, durante o dia, em tempo real no feed de leituras e no dashboard.
 
 ## 8. Segurança
 
 - **Auth:** access token JWT (15 min, RS256) + refresh token opaco rotativo (30 dias, hash no banco, detecção de reuso). Senha com argon2id. Mobile guarda refresh em SecureStore; web em cookie `HttpOnly; Secure; SameSite=Strict` (ADR-0004).
 - **RBAC:** papéis por organização (`owner`, `manager`, `operator`) + `driver` global + `platform_admin`. Guard `@Roles()` + escopo por `organization_id` e, para operador, por `parking_lot_id`.
+- **Dispositivos (agente de borda):** API key por dispositivo (hash no banco, exibida uma vez, rotacionável) + assinatura HMAC
+  do corpo com timestamp (janela de 5 min contra replay); escopo restrito a um estacionamento; só endpoints `/v1/devices/*`.
+  O endereço RTSP e a senha da câmera ficam só no agente, nunca no servidor.
 - **Webhooks:** validação de assinatura HMAC, allowlist de IP quando o PSP oferecer, tabela `webhook_events` com unique no ID externo.
 - **Rate limiting:** Redis (`@nestjs/throttler`) por IP e por usuário; mais restrito em login e criação de pagamento.
+- **LGPD — câmeras:** placa e imagem de veículo são dados pessoais. Aviso visível de monitoramento na entrada; só recortes
+  (sem vídeo contínuo); retenção de imagens configurável (padrão 30 dias) com expurgo automático; bucket criptografado e privado,
+  acesso por URL assinada de curta duração e registrado em `audit_logs`; leituras em si mantidas pelo prazo fiscal.
 - **LGPD:** mínimo de dados, consentimento no cadastro do motorista, export/exclusão de conta, retenção (sessões anonimizadas após 5 anos por obrigação fiscal; logs 30 dias), placas mascaradas em logs.
 - **Auditoria:** `audit_logs` para ações sensíveis (estorno, cancelamento manual de cobrança, alteração de tarifa, abertura manual de cancela).
 - **Supply chain:** Renovate/Dependabot, `pnpm audit` no CI, imagem distroless, scan com Trivy.
@@ -189,7 +279,8 @@ Se a API estiver indisponível, o painel do operador mantém fila local (Indexed
 | Componente | React Testing Library + MSW | Telas do painel |
 | E2E web | Playwright | Entrada → cobrança → saída; login; cadastro de tarifa |
 | E2E mobile | Maestro (opcional) | Busca → pagamento de sessão |
-| Carga | k6 | Pico de 40 sessões/s e 300 buscas/s (Fase 10) |
+| Carga | k6 | Pico de 40 sessões/s, 300 buscas/s e lotes LPR de fim do dia (Fase 11) |
+| LPR (borda) | pytest + dataset de avaliação | Acurácia por placa, latência por frame, store-and-forward sem perda (derrubar rede no meio do envio) |
 
 ## 11. Deploy e ambientes
 
@@ -197,6 +288,7 @@ Se a API estiver indisponível, o painel do operador mantém fila local (Indexed
 |---|---|---|
 | `local` | Docker Compose (postgres+postgis, redis, mailpit) | `pnpm dev` |
 | `preview` | Opcional — Render/Fly.io para demo de portfólio | Deploy por PR |
+| `edge` | Mini PC no estacionamento | Imagem Docker do agente (arm64/amd64) ou serviço systemd; atualização via pull da imagem versionada |
 | `staging` / `prod` | AWS: ECS Fargate, RDS, ElastiCache, S3+CloudFront, Secrets Manager | Terraform + GitHub Actions (OIDC, sem chaves estáticas) |
 
 Pipeline: `lint → typecheck → unit → integration → build → docker image (ECR) → migrate (task one-off) → deploy rolling`.
@@ -209,4 +301,7 @@ Pipeline: `lint → typecheck → unit → integration → build → docker imag
 | Webhook de pagamento atrasado/perdido | Job de conciliação consulta PSP para `pending` > 2 min |
 | Operador sem internet | Modo degradado com fila local (7.6) |
 | Placa digitada errado | Normalização + busca fuzzy (trigram) + confirmação por QR |
-| Escopo grande demais para portfólio | Fases entregáveis independentes; MVP demonstrável ao fim da Fase 7 |
+| Escopo grande demais para portfólio | Fases entregáveis independentes; MVP demonstrável ao fim da Fase 8; valor para o dono já no fim da Fase 5 |
+| Leitura de placa errada (sujeira, noite, ângulo) | Votação entre frames, caracteres confundíveis no pareamento, fila de revisão humana, métricas de acurácia por câmera |
+| Internet do estacionamento cai | Store-and-forward no agente + modo `end_of_day`; relatório aguarda sincronização |
+| Sem câmera física para desenvolver | Fonte "simulador" no agente com imagens/vídeos de exemplo |

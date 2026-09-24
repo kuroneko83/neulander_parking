@@ -21,7 +21,7 @@ Argument (optional): a task ID like `2.3`. Without it, pick automatically.
 
 ## 3. Implement
 - Delegate to the owning agent named in the task (`backend-engineer`, `database-engineer`, `web-engineer`,
-  `mobile-engineer`, `payments-engineer`, `qa-engineer`, `devops-engineer`). Give it: the task text, acceptance
+  `mobile-engineer`, `vision-engineer`, `payments-engineer`, `qa-engineer`, `devops-engineer`). Give it: the task text, acceptance
   criteria, relevant doc paths, and the Definition of Done from `CLAUDE.md`.
 - Order for cross-layer work: `packages/contracts` → database → API → web/mobile.
 

@@ -12,6 +12,7 @@ stateDiagram-v2
   paid --> closed: Exit dentro da janela
   paid --> open: Janela de saída expirou (cobra diferença)
   open --> cancelled: Cancel (gestor, auditado)
+  open --> closed: Saída lida pela câmera (lpr_mode = record_only / enforced sem pagamento → settlement_status = unpaid_exit)
   closed --> [*]
   cancelled --> [*]
 ```
@@ -19,7 +20,10 @@ stateDiagram-v2
 Invariantes:
 - Uma placa só pode ter **uma** sessão não finalizada por estacionamento (unique parcial no banco).
 - `rate_plan_version_id` é fixado na entrada.
-- Saída só é permitida em `paid` com `now <= exit_deadline_at`, ou em `open` se o valor cotado for 0.
+- Saída pelo operador só é permitida em `paid` com `now <= exit_deadline_at`, ou em `open` se o valor cotado for 0.
+- **Saída registrada pela câmera nunca é recusada** (o carro já saiu fisicamente): a sessão fecha com `exit_at = captured_at`,
+  `amount_due_cents` calculado e `settlement_status` indicando se foi paga. É isso que alimenta o relatório diário.
+- Os horários de entrada/saída de sessões LPR vêm do `captured_at` da leitura, não do relógio do servidor.
 
 ## 2. Entrada e saída pelo operador (caminho principal do MVP)
 
@@ -87,7 +91,7 @@ sequenceDiagram
 Falhas tratadas: webhook duplicado (unique em `webhook_events`), webhook fora de ordem (sempre consulta estado no PSP),
 webhook perdido (job `payments-reconcile`), valor divergente (rejeita e audita), pagamento após sessão cancelada (estorno automático).
 
-## 4. Máquina de estado — `Reservation` (Fase 8)
+## 4. Máquina de estado — `Reservation` (Fase 9)
 
 ```mermaid
 stateDiagram-v2
@@ -115,8 +119,93 @@ stateDiagram-v2
   partially_refunded --> refunded
 ```
 
-## 6. Mensalista na entrada (Fase 9)
+## 6. Mensalista na entrada (Fase 10)
 
 Na `StartSession`, se a placa pertence a `subscription_vehicles` de assinatura `active` no lot e o horário é permitido
 pelas regras do plano → sessão criada com `subscription_id` e passa direto para `paid` (valor 0, janela de saída ilimitada).
 Se `past_due` → entrada como rotativo + alerta ao operador.
+
+## 7. Câmera LPR — do carro na cancela até a sessão
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant CAM as Câmera (RTSP / ANPR)
+  participant EA as Agente de borda
+  participant LDB as SQLite local
+  participant API as API /devices
+  participant Q as fila lpr-match (por lot)
+  participant S as sessions
+  participant P as Painel (WS)
+
+  CAM->>EA: frames / evento ANPR
+  EA->>EA: detecta veículo + placa, OCR, rastreia direção, vota melhor leitura
+  EA->>LDB: grava leitura {id UUIDv7, capturedAt, placa, confiança, direção} + recortes
+  alt upload_mode = realtime
+    EA->>API: presign + PUT imagens no S3
+    EA->>API: POST /devices/reads [lote pequeno, a cada ~2 s]
+  else upload_mode = end_of_day
+    Note over EA,LDB: acumula o dia todo
+    EA->>API: no horário de corte: lotes de 500 até esvaziar + /sync-complete
+  end
+  API->>API: valida HMAC, INSERT ... ON CONFLICT (id) DO NOTHING
+  API-->>EA: 207 {accepted/duplicate por item}
+  EA->>LDB: marca como enviado (só após confirmação)
+  API->>Q: plate_read_received
+  Q->>Q: processa em ordem de capturedAt (fluxo §8)
+  Q->>S: entrada → StartSession(lpr, entryAt = capturedAt)<br/>saída → CloseSessionFromRead(exitAt = capturedAt)
+  Q-->>P: lpr.read / lpr.review_required
+```
+
+Garantias: **at-least-once** do agente + **idempotência** no servidor = exatamente uma leitura registrada.
+Internet caída: o agente continua lendo e grava tudo localmente; ao voltar, envia o atraso em ordem.
+
+## 8. Pareamento de leituras (`PlateMatcher`, domínio puro)
+
+Para cada leitura, em ordem de `captured_at` dentro do estacionamento:
+
+1. **Deduplicação:** mesma placa + mesma direção + mesmo dispositivo em < 60 s → `duplicate`.
+2. **Confiança:** abaixo do limiar da câmera (padrão 0,80) → `needs_review` (não mexe em sessão até alguém revisar).
+3. **Entrada (`in`):**
+   - já existe sessão aberta dessa placa → provável saída não lida; fecha a anterior como exceção `missing_exit` e abre nova.
+   - senão → abre sessão (ou vincula a mensalista/reserva, Fases 9–10).
+4. **Saída (`out`):**
+   - busca sessão aberta pela placa exata; se não houver, tenta variações de caracteres confundíveis
+     (O↔0, I↔1, B↔8, S↔5, Z↔2, G↔6, D↔0) e distância de edição ≤ 1 entre as sessões abertas do lot;
+   - exatamente um candidato → fecha a sessão; zero ou vários → `needs_review` com os candidatos sugeridos.
+5. **Direção `unknown`** (câmera bidirecional sem rastreamento conclusivo): se há sessão aberta da placa → trata como saída; senão → entrada.
+6. **Leitura atrasada** (chega depois de leituras posteriores já processadas): reprocessa a partir do `captured_at` dela
+   para aquela placa; se o dia já teve relatório, marca o relatório para nova versão.
+
+Revisão humana (`/plate-reads/:id/review`): corrigir a placa re-executa o pareamento para aquela leitura; tudo auditado.
+
+## 9. Fechamento do dia e relatório
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant J as job daily-report (lot)
+  participant L as lpr
+  participant R as reporting
+  participant S3
+  participant N as notifications
+  actor D as Dono
+
+  J->>L: todas as câmeras com last_synced_until ≥ corte?
+  alt não
+    J->>J: reagenda em 10 min (até 2 h após o corte)
+  end
+  J->>R: gerar(lot, businessDate)
+  R->>R: agrega sessões e leituras do dia (fuso do lot) + exceções + avisos
+  R->>S3: PDF + CSV
+  R->>R: daily_reports (ready, version n) + outbox(daily_report_ready)
+  R->>N: daily_report_ready
+  N->>D: e-mail "Resumo do dia 24/09 — 312 entradas, 298 saídas, R$ 4.870 calculados, 14 ainda no pátio, 3 exceções" + links
+```
+
+Conteúdo do relatório:
+- **Resumo:** entradas, saídas, veículos ainda no pátio no corte, pico de ocupação (horário), permanência média e mediana, faturamento calculado vs. recebido (e diferença).
+- **Gráfico:** entradas e saídas por hora.
+- **Tabela:** placa · entrada · saída · permanência · valor calculado · valor pago · forma de pagamento · origem (câmera/operador).
+- **Exceções:** saída sem entrada, entrada sem saída (dias anteriores), leituras corrigidas manualmente, saída sem pagamento (`enforced`), duplicadas suspeitas.
+- **Saúde das câmeras:** tempo online, leituras por câmera, % de leituras em revisão, desvio de relógio.

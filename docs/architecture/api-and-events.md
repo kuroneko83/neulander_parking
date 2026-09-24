@@ -63,13 +63,42 @@
 | POST | `/v1/webhooks/mercadopago` | PSP (assinatura HMAC) |
 | POST | `/v1/webhooks/stripe` | PSP (assinatura) |
 
-### Reservations (Fase 8)
+### Câmeras LPR — API de dispositivo (agente de borda)
+Autenticação: `Authorization: Device <apiKey>` + `X-Signature: t=<unix>,v1=<hmac-sha256(t + "." + body)>`. Escopo: um estacionamento.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/v1/devices/heartbeat` | Status do agente (versão, fila local, desvio de relógio, fps, temperatura) → responde com `DeviceConfig` atual |
+| POST | `/v1/devices/uploads:presign` | Pede URLs pré-assinadas (PUT) para até 1000 imagens de recorte |
+| POST | `/v1/devices/reads` | Lote de até 500 `PlateReadInput` `{ id, capturedAt, plateRaw, confidence, candidates[], direction, plateImageKey?, vehicleImageKey? }` → `207` com status por item (`accepted` \| `duplicate` \| `rejected`) |
+| POST | `/v1/devices/sync-complete` | `{ syncedUntil }` — agente informa que enviou tudo até esse instante (libera o relatório diário) |
+
+### Câmeras LPR — painel
+| Método | Rota | Quem |
+|---|---|---|
+| GET/POST | `/v1/orgs/:orgId/lots/:lotId/devices` | manager+ — POST retorna a API key **uma única vez** |
+| PATCH | `/v1/orgs/:orgId/devices/:deviceId` | manager+ (modo de envio, faixa, limiar, desativar) |
+| POST | `/v1/orgs/:orgId/devices/:deviceId/rotate-key` | owner, manager (auditado) |
+| GET | `/v1/orgs/:orgId/lots/:lotId/plate-reads?status=&plate=&from=&to=` | operator+ |
+| GET | `/v1/orgs/:orgId/plate-reads/:readId/images` | operator+ — URLs assinadas curtas (acesso auditado) |
+| POST | `/v1/orgs/:orgId/plate-reads/:readId/review` | operator+ — `{ action: 'correct' \| 'confirm' \| 'ignore', plate? }` |
+
+### Relatório diário
+| Método | Rota | Quem |
+|---|---|---|
+| GET | `/v1/orgs/:orgId/lots/:lotId/daily-reports?from=&to=` | owner, manager |
+| GET | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date` | owner, manager — resumo + lista de veículos |
+| GET | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date/download?format=pdf\|csv` | owner, manager — redirect para URL assinada |
+| POST | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date/regenerate` | owner, manager |
+| PATCH | `/v1/orgs/:orgId/lots/:lotId/report-settings` | owner — horário de corte, destinatários, retenção de imagens |
+
+### Reservations (Fase 9)
 `POST /v1/lots/:lotId/reservations` · `GET /v1/me/reservations` · `POST /v1/me/reservations/:id/cancel` · `GET /v1/orgs/:orgId/lots/:lotId/reservations`
 
-### Subscriptions (Fase 9)
+### Subscriptions (Fase 10)
 `/v1/orgs/:orgId/lots/:lotId/subscription-plans` · `/v1/orgs/:orgId/subscriptions` (CRUD, placas autorizadas, faturas)
 
-### Reports (Fase 9)
+### Reports de período (Fase 10)
 `GET /v1/orgs/:orgId/reports/revenue?from=&to=&lotId=&groupBy=day` · `GET .../reports/occupancy` · `POST .../reports/exports` (assíncrono → S3 URL assinada)
 
 ## WebSocket (Socket.IO, namespace `/rt`)
@@ -79,7 +108,7 @@ Autenticação no handshake com access token. Salas:
 | Sala | Quem entra | Eventos emitidos pelo servidor |
 |---|---|---|
 | `lot:{lotId}` | operador/gestor do lot; motorista vendo o detalhe | `occupancy.updated { lotId, free, occupied, reserved, byZone[] }` |
-| `lot:{lotId}:ops` | operador/gestor | `session.started`, `session.paid`, `session.closed`, `payment.failed` |
+| `lot:{lotId}:ops` | operador/gestor | `session.started`, `session.paid`, `session.closed`, `payment.failed`, `lpr.read { readId, plate, direction, confidence, capturedAt, thumbUrl, status }`, `lpr.review_required`, `device.status_changed` |
 | `user:{userId}` | motorista | `session.updated`, `payment.updated`, `reservation.updated` |
 
 Mensagens cliente → servidor: `subscribe { room }`, `unsubscribe { room }` (servidor valida permissão).
@@ -99,6 +128,11 @@ Envelope: `{ id, type, version, occurredAt, aggregateId, organizationId, payload
 | `payments.payment_succeeded.v1` | payments | sessions / reservations / subscriptions (conforme `payableType`) |
 | `payments.payment_failed.v1` | payments | notifications, sessions |
 | `payments.payment_refunded.v1` | payments | reporting, notifications |
+| `lpr.plate_read_received.v1` | lpr (ingestão) | lpr (pareamento, processado em ordem por lot) |
+| `lpr.plate_read_matched.v1` | lpr | sessions (abre/fecha sessão com horário da leitura), occupancy |
+| `lpr.review_required.v1` | lpr | occupancy (WS para o painel), notifications (resumo ao gestor se a fila crescer) |
+| `lpr.device_offline.v1` | lpr (job) | notifications (alerta ao gestor/dono), reporting (aviso no relatório) |
+| `reporting.daily_report_ready.v1` | reporting | notifications (e-mail para `report_recipients`) |
 | `reservations.reservation_confirmed.v1` | reservations | facilities (vaga `reserved` na janela), notifications |
 | `reservations.reservation_expired.v1` | reservations (job) | facilities, notifications |
 | `subscriptions.subscription_past_due.v1` | subscriptions | notifications, sessions (bloqueia entrada como mensalista) |
@@ -110,6 +144,10 @@ Envelope: `{ id, type, version, occurredAt, aggregateId, organizationId, payload
 | `outbox-relay` | contínuo (poll 500 ms / LISTEN-NOTIFY) | Publica eventos pendentes |
 | `payments-reconcile` | 1 min | Consulta PSP para `pending` > 2 min |
 | `reservations-expire` | 1 min | Expira holds não pagos e marca no-show |
+| `lpr-match` | contínuo (fila por lot, concorrência 1 por lot) | Pareia leituras em ordem de `captured_at` |
+| `device-offline-check` | 2 min | Marca câmera offline sem heartbeat há > 5 min |
+| `daily-report` | por lot, no `business_day_cutoff` local | Espera sync (máx. 2 h) → agrega → PDF/CSV → e-mail |
+| `lpr-image-purge` | diário | Expurga imagens além de `image_retention_days` |
 | `occupancy-reconcile` | 5 min | Recalcula contadores Redis a partir do Postgres |
 | `subscriptions-billing` | diário 03:00 local | Gera faturas e marca inadimplência |
 | `housekeeping` | diário | Purge de outbox/idempotency, anonimização LGPD |

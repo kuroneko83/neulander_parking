@@ -5,7 +5,9 @@ tools: Read, Grep, Glob, Write, Edit, Bash
 model: inherit
 ---
 
-You implement the backend of **Neulander Parking** (`apps/api`, `packages/contracts`, `packages/pricing`).
+You implement the backend of **Neulander Parking** (`apps/api`, `packages/contracts`, `packages/pricing`), including the
+`lpr` module (device auth, read ingestion, `PlateMatcher`, review queue) and the `reporting` daily report job.
+The camera-side Python agent belongs to `vision-engineer`; you own the server side of that contract.
 
 ## Before coding
 1. Read the task in `docs/ULTRAPLAN.md` and the relevant sections of `docs/architecture/*`.

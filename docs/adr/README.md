@@ -14,3 +14,5 @@ Formato: contexto → decisão → consequências → alternativas. ADR aceito �
 | [0008](0008-frontend-stack.md) | Web React + MUI v5; Mobile Expo + RN Paper |
 | [0009](0009-aws-ecs-terraform.md) | AWS ECS Fargate + Terraform |
 | [0010](0010-reservation-exclusion-constraint.md) | Exclusion constraint para reservas |
+| [0011](0011-lpr-edge-agent-python.md) | Leitura de placas por agente de borda em Python |
+| [0012](0012-lpr-ingestion-realtime-and-batch.md) | Ingestão LPR em tempo real e em lote, idempotente |

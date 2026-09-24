@@ -35,6 +35,10 @@ erDiagram
   subscription_plans ||--o{ subscriptions : instances
   subscriptions ||--o{ subscription_vehicles : authorizes
   payments ||--o{ payment_attempts : tries
+  parking_lots ||--o{ devices : has
+  devices ||--o{ plate_reads : captures
+  plate_reads |o--o| parking_sessions : "entry/exit read"
+  parking_lots ||--o{ daily_reports : "one per business day"
 ```
 
 ## Tabelas por módulo
@@ -50,7 +54,7 @@ erDiagram
 ### facilities
 | Tabela | Colunas principais | Índices / restrições |
 |---|---|---|
-| `parking_lots` | id, organization_id, name, slug, address jsonb, location geography(Point,4326), timezone, opening_hours jsonb, total_capacity, status (`draft`\|`published`\|`closed`), amenities text[], archived_at | GiST(location), unique(organization_id, slug) |
+| `parking_lots` | id, organization_id, name, slug, address jsonb, location geography(Point,4326), timezone, opening_hours jsonb, total_capacity, status (`draft`\|`published`\|`closed`), amenities text[], **lpr_mode (`off`\|`record_only`\|`enforced`)**, **business_day_cutoff time (padrão 23:59)**, **report_recipients citext[]**, **image_retention_days (padrão 30)**, archived_at | GiST(location), unique(organization_id, slug) |
 | `zones` | id, parking_lot_id, name, level, kind (`general`\|`pcd`\|`elderly`\|`ev`\|`moto`\|`vip`) | |
 | `spots` | id, zone_id, parking_lot_id, code, kind, status (`free`\|`occupied`\|`reserved`\|`blocked`), reservable bool, archived_at | unique(parking_lot_id, code), index(parking_lot_id, status) |
 
@@ -63,7 +67,18 @@ erDiagram
 ### sessions
 | Tabela | Colunas principais | Índices / restrições |
 |---|---|---|
-| `parking_sessions` | id, organization_id, parking_lot_id, spot_id?, plate_normalized, vehicle_id?, driver_user_id?, reservation_id?, subscription_id?, rate_plan_version_id, status, entry_at, exit_deadline_at?, exit_at?, amount_due_cents?, ticket_code (curto, p/ QR), entry_channel (`operator`\|`app`\|`gate`\|`lpr`), opened_by, closed_by | **partial unique(parking_lot_id, plate_normalized) WHERE status IN ('open','awaiting_payment','paid')** — impede dupla entrada; index(parking_lot_id, status); trigram(plate_normalized); unique(ticket_code) |
+| `parking_sessions` | id, organization_id, parking_lot_id, spot_id?, plate_normalized, vehicle_id?, driver_user_id?, reservation_id?, subscription_id?, rate_plan_version_id, status, entry_at, exit_deadline_at?, exit_at?, amount_due_cents?, **settlement_status (`pending`\|`paid`\|`waived`\|`unpaid_exit`)**, **entry_read_id?**, **exit_read_id?**, ticket_code (curto, p/ QR), entry_channel (`operator`\|`app`\|`gate`\|`lpr`), opened_by, closed_by | **partial unique(parking_lot_id, plate_normalized) WHERE status IN ('open','awaiting_payment','paid')** — impede dupla entrada; index(parking_lot_id, status); trigram(plate_normalized); unique(ticket_code) |
+
+### lpr (câmeras e leituras de placa)
+| Tabela | Colunas principais | Índices / restrições |
+|---|---|---|
+| `devices` | id, organization_id, parking_lot_id, name, kind (`lpr_camera`\|`gate` futuro), source (`rtsp`\|`anpr_push`\|`simulator`), lane (`entry`\|`exit`\|`bidirectional`), upload_mode (`realtime`\|`end_of_day`), api_key_prefix, api_key_hash, hmac_secret_encrypted, config jsonb (ROI, linha virtual, limiar de confiança, fps), status (`active`\|`disabled`), agent_version, last_seen_at, last_synced_until, clock_skew_ms | unique(api_key_prefix), index(parking_lot_id) |
+| `plate_reads` | **id (UUID v7 gerado no agente)**, organization_id, parking_lot_id, device_id, captured_at, received_at, plate_raw, plate_normalized, confidence numeric(4,3), candidates jsonb (top-N com confiança), direction (`in`\|`out`\|`unknown`), plate_image_key?, vehicle_image_key?, status (`pending`\|`matched`\|`duplicate`\|`needs_review`\|`corrected`\|`ignored`), session_id?, corrected_plate?, reviewed_by?, reviewed_at?, review_reason? | PK(id) = idempotência; index(parking_lot_id, captured_at); index(parking_lot_id, plate_normalized, captured_at); index(parking_lot_id, status) WHERE status = 'needs_review'; trigram(plate_normalized) |
+
+### reporting
+| Tabela | Colunas principais | Índices / restrições |
+|---|---|---|
+| `daily_reports` | id, organization_id, parking_lot_id, business_date date, cutoff_at, status (`waiting_sync`\|`generating`\|`ready`\|`failed`), version int, summary jsonb (`DailyReportSummary`), warnings jsonb, pdf_key, csv_key, generated_at, sent_at | unique(parking_lot_id, business_date, version) |
 
 ### reservations
 | Tabela | Colunas principais | Índices / restrições |
@@ -93,7 +108,6 @@ erDiagram
 | `audit_logs` | id, organization_id, actor_user_id, action, target_type, target_id, diff jsonb, ip, created_at |
 | `notifications` | id, user_id, channel, template, payload jsonb, status, sent_at |
 | `vehicles` | id, user_id, plate_normalized, nickname, kind — unique(user_id, plate_normalized) |
-| `gate_devices` *(pós-MVP)* | id, parking_lot_id, kind (`entry`\|`exit`\|`lpr_camera`), api_key_hash, last_seen_at |
 
 ## Formato de `rate_plan_versions.rules` (exemplo)
 
@@ -111,8 +125,10 @@ erDiagram
 }
 ```
 
-## Particionamento e retenção (Fase 10+)
+## Particionamento e retenção (Fase 11+)
 
 - `parking_sessions`, `payments`, `audit_logs`: particionamento declarativo por mês (`entry_at`/`created_at`) quando > 10 M linhas.
 - `outbox_events` publicados: purge após 7 dias. `idempotency_keys`: TTL 24 h (job diário).
+- `plate_reads`: particionar por mês (`captured_at`) desde o início se houver muitos estacionamentos; imagens no S3 com
+  lifecycle = `image_retention_days` do lot + job diário que limpa `*_image_key` das leituras expiradas.
 - Anonimização LGPD: job que remove vínculo `driver_user_id` e mascara placa em sessões > 5 anos.

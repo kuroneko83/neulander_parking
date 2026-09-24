@@ -1,6 +1,8 @@
 # Neulander Parking
 
-Plataforma SaaS para estacionamentos: **painel web** para operadores e gestores (entrada/saída, tarifas, mensalistas,
+Plataforma SaaS para estacionamentos: **câmera com leitura de placa** na entrada/saída que registra automaticamente
+a hora de entrada e saída de cada carro (em tempo real ou enviando no fim do dia) e manda um **relatório diário ao dono**;
+**painel web** para operadores e gestores (entrada/saída, tarifas, mensalistas,
 relatórios, ocupação em tempo real) e **app mobile** para motoristas (buscar vagas no mapa, reservar, pagar com Pix/cartão,
 ticket digital).
 
@@ -13,6 +15,7 @@ ticket digital).
 | API | NestJS (monólito modular), Drizzle ORM, PostgreSQL 16 + PostGIS, Redis, BullMQ, Socket.IO |
 | Web | React 18, Vite, MUI v5, TanStack Query, React Hook Form + Zod |
 | Mobile | Expo, expo-router, React Native Paper, react-native-maps |
+| Câmera (borda) | Python, OpenCV, ONNX Runtime, SQLite store-and-forward, suporte a câmeras RTSP e ANPR |
 | Compartilhado | Contratos Zod, motor de tarifação puro (TypeScript) |
 | Infra | Docker Compose, AWS ECS Fargate/RDS/ElastiCache, Terraform, GitHub Actions |
 | Qualidade | Vitest, Testcontainers, Playwright, k6 |
@@ -32,7 +35,7 @@ ticket digital).
 Este repositório é preparado para ser construído com [Claude Code](https://claude.com/claude-code):
 
 - [`CLAUDE.md`](CLAUDE.md) — regras de arquitetura, convenções e Definition of Done
-- [`.claude/agents/`](.claude/agents) — subagentes especializados (architect, backend, database, payments, web, mobile, qa, devops, security, code review)
+- [`.claude/agents/`](.claude/agents) — subagentes especializados (architect, backend, database, payments, web, mobile, vision/LPR, qa, devops, security, code review)
 - [`.claude/skills/`](.claude/skills) — `/next-task` (executa a próxima tarefa do plano), `/new-adr`, `/new-module`
 
 Para começar: abra o Claude Code na raiz e rode `/next-task`.

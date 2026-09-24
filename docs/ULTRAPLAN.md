@@ -19,13 +19,14 @@
 | 2 | Estacionamentos & vagas | Gestor cadastra lot, zonas, vagas no painel com mapa | — |
 | 3 | Motor de tarifação | Gestor cria tabela de preço e simula | — |
 | 4 | Sessões (entrada/saída) | Operador registra entrada/saída e cobra em dinheiro | **M1 — Operação básica** |
-| 5 | Pagamentos | Pix e cartão com webhook, recibo | — |
-| 6 | Tempo real & dashboard | Ocupação ao vivo e KPIs do dia | **M2 — Painel completo** |
-| 7 | App do motorista | Busca no mapa, ticket via QR, pagar pelo app | **M3 — MVP público** |
-| 8 | Reservas | Reservar vaga com janela de tempo | — |
-| 9 | Mensalistas & relatórios | Planos mensais, faturas, relatórios/exports | — |
-| 10 | Produção | AWS via Terraform, observabilidade, carga, modo degradado | **M4 — Produção** |
-| 11 | Stretch | LPR, IoT, IA | — |
+| 5 | Câmera LPR & relatório diário | Câmera lê placas na entrada/saída (tempo real ou lote no fim do dia) e o dono recebe o relatório diário | **M2 — Controle automático** |
+| 6 | Pagamentos | Pix e cartão com webhook, recibo | — |
+| 7 | Tempo real & dashboard | Ocupação ao vivo e KPIs do dia | **M3 — Painel completo** |
+| 8 | App do motorista | Busca no mapa, ticket via QR, pagar pelo app | **M4 — MVP público** |
+| 9 | Reservas | Reservar vaga com janela de tempo | — |
+| 10 | Mensalistas & relatórios | Planos mensais, faturas, relatórios de período (semana/mês) e exports | — |
+| 11 | Produção | AWS via Terraform, observabilidade, carga, modo degradado | **M5 — Produção** |
+| 12 | Stretch | Cancela automática, IoT, IA | — |
 
 ---
 
@@ -35,7 +36,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 
 - [ ] **0.1** Monorepo pnpm + Turborepo, `packages/config` (tsconfig base strict, eslint flat config, prettier), `.nvmrc` (Node 22), `.editorconfig`, `.env.example` — `devops-engineer`
   - Aceite: `pnpm lint`, `pnpm typecheck`, `pnpm test` rodam na raiz (mesmo sem código).
-- [ ] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`; healthchecks; volume nomeado — `devops-engineer`
+- [ ] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, `minio` (imagens LPR/relatórios); healthchecks; volume nomeado — `devops-engineer`
 - [ ] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer`
 - [ ] **0.4** Drizzle configurado (migrations em `apps/api/drizzle/`), extensões `postgis`, `btree_gist`, `pg_trgm`, `citext` na migration inicial; scripts `db:generate`/`db:migrate`/`db:seed` — `database-engineer`
 - [ ] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer`
@@ -43,7 +44,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [ ] **0.6** `packages/contracts` (Zod) e `packages/pricing` (vazio com teste de fumaça) com build `tsup` — `backend-engineer`
 - [ ] **0.7** `apps/web`: Vite + React 18 + MUI v5 (tema claro/escuro, pt-BR), React Router, TanStack Query, layout com AppBar/Drawer, página 404 — `web-engineer`
 - [ ] **0.8** `eslint-plugin-boundaries` (ou dependency-cruiser) impedindo import entre internals de módulos — `architect`
-- [ ] **0.9** GitHub Actions: `ci.yml` (install com cache, lint, typecheck, unit, integration com services postgres/redis, build); PR template; Dependabot/Renovate — `devops-engineer`
+- [ ] **0.9** GitHub Actions: `ci.yml` (install com cache, lint, typecheck, unit, integration com services postgres/redis, build; job Python para `apps/edge-agent` com ruff + mypy + pytest quando existir); PR template; Dependabot/Renovate — `devops-engineer`
 - [ ] **0.10** Testcontainers helper (`apps/api/test/setup-int.ts`) subindo PostGIS + Redis e rodando migrations — `qa-engineer`
 - [ ] **0.11** Hook SessionStart do Claude Code (`.claude/hooks`) que roda `pnpm install` em sessões web — `devops-engineer`
 
@@ -85,67 +86,91 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [ ] **4.6** E2E: entrada → cotação após 2h (Clock fake) → pagamento em dinheiro → saída; dupla entrada retorna `409 SESSION_ALREADY_OPEN` — `qa-engineer`
 - [ ] **4.7** Revisão de código da fase + demo gravada (GIF no README) — `code-reviewer`
 
-## Fase 5 — Pagamentos
+## Fase 5 — Câmera LPR & relatório diário · Marco M2
 
-- [ ] **5.1** Porta `PaymentProvider` + `FakeProvider` (simula webhook com atraso configurável) + `CashProvider` — `payments-engineer`
-- [ ] **5.2** Schema `payments`, `payment_attempts`, `webhook_events` — `database-engineer`
-- [ ] **5.3** `MercadoPagoPixProvider` (sandbox): criação de cobrança, webhook assinado, consulta de status — `payments-engineer`
-- [ ] **5.4** `StripeCardProvider` (test mode, Payment Intents) — `payments-engineer`
-- [ ] **5.5** Integração `payments` ↔ `sessions` via eventos; janela de saída; cobrança de diferença se expirar — `backend-engineer`
-- [ ] **5.6** Jobs `payments-reconcile` e estorno (parcial/total, auditado) — `payments-engineer`
-- [ ] **5.7** Recibo em PDF (worker → S3/minio local) e e-mail — `backend-engineer`
-- [ ] **5.8** Web: modal de cobrança com Pix (QR + copia e cola + polling/WS), cartão, dinheiro com troco — `web-engineer`
-- [ ] **5.9** Testes: webhook duplicado, fora de ordem, perdido, valor divergente — `qa-engineer`
-- [ ] **5.10** Revisão de segurança (assinaturas, idempotência, dados de cartão nunca tocam o servidor) — `security-reviewer`
+Objetivo: a câmera na entrada/saída lê a placa, o sistema marca **hora de entrada e de saída** de cada carro
+automaticamente (em **tempo real** ou enviando **em lote no fim do dia**) e o dono recebe um **relatório diário**.
+Desenho completo: `system-design.md` §7.7, `flows.md` §7–9, ADR-0011 e ADR-0012.
 
-## Fase 6 — Tempo real & dashboard · Marco M2
+- [ ] **5.1** Contracts: `PlateReadInput` (lote), `DeviceHeartbeat`, `DeviceConfig`, `DailyReportSummary`; export JSON Schema dos contratos para o agente Python (`pnpm contracts:jsonschema`) — `architect`
+- [ ] **5.2** Schema `devices`, `plate_reads`, `daily_reports`; colunas novas em `parking_sessions` (`entry_read_id`, `exit_read_id`, `settlement_status`) e `parking_lots` (`lpr_mode`, `business_day_cutoff`, `report_recipients`) — `database-engineer`
+- [ ] **5.3** Módulo `lpr`: cadastro de câmera (gera API key exibida uma única vez), autenticação de dispositivo (API key + assinatura HMAC com timestamp), `heartbeat` que devolve config — `backend-engineer`
+- [ ] **5.4** Ingestão `POST /v1/devices/reads` em lote (até 500), idempotente pelo `id` gerado na borda, + URLs pré-assinadas para as imagens (S3/minio) — `backend-engineer`
+  - Aceite: reenviar o mesmo lote 3× não duplica nada; leituras chegando fora de ordem geram o mesmo resultado.
+- [ ] **5.5** Domínio `PlateMatcher` (puro): normalização, caracteres confundíveis (O/0, I/1, B/8, S/5, Z/2, G/6), deduplicação de leituras repetidas (< 60 s), pareamento entrada↔saída por `captured_at`, limiar de confiança → `needs_review` — `backend-engineer`
+  - Aceite: ≥ 30 cenários tabulares (saída sem entrada, entrada sem saída, placa lida errada 1 caractere, mesma placa volta no dia, lote do fim do dia chegando depois de leituras em tempo real, virada da meia-noite).
+- [ ] **5.6** Integração `lpr` → `sessions`: leitura de entrada abre sessão (`entry_channel = lpr`), leitura de saída fecha com `amount_due_cents` calculado; modo `record_only` vs `enforced` (flows.md §7) — `backend-engineer`
+- [ ] **5.7** `apps/edge-agent` (Python): config, fontes de imagem plugáveis (**simulador** com pasta de imagens/vídeo, RTSP, câmera ANPR via push HTTP), armazenamento local SQLite (store-and-forward), uploader com modos `realtime` e `end_of_day`, heartbeat, retry com backoff — `vision-engineer`
+- [ ] **5.8** Pipeline de reconhecimento: captura RTSP → gatilho de movimento/ROI → detecção de veículo e placa (ONNX) → OCR de placa Mercosul/antiga → rastreamento (direção entrada/saída na mesma faixa) → votação entre frames → leitura final com confiança — `vision-engineer`
+  - Aceite: script de avaliação em dataset de exemplo reporta acurácia por placa (meta ≥ 95% de dia, ≥ 90% à noite) e latência por frame no hardware alvo.
+- [ ] **5.9** Adapter para câmeras com LPR embarcado (ex.: Intelbras/Hikvision ANPR enviando evento HTTP): só normaliza e encaminha, sem rodar o modelo — `vision-engineer`
+- [ ] **5.10** Web: cadastro/gestão de câmeras (status online/offline, última sincronização, modo), feed ao vivo de leituras com miniatura (WS), **fila de revisão** para leituras de baixa confiança ou sem par (corrigir placa com 1 clique) — `web-engineer`
+- [ ] **5.11** Relatório diário: job por estacionamento no horário de corte → espera sincronização das câmeras (máx. 2 h) → gera resumo + **PDF e CSV** → e-mail para o dono/gestores + página no painel; regenerar sob demanda se chegar leitura atrasada — `backend-engineer`
+- [ ] **5.12** Web: página "Relatórios diários" (lista por dia, resumo, gráfico entradas/saídas por hora, tabela placa/entrada/saída/permanência/valor, exceções, download PDF/CSV) — `web-engineer`
+- [ ] **5.13** E2E: simulador reproduz um dia de leituras em modo `end_of_day` → relatório gerado confere com o gabarito esperado; o mesmo dia em `realtime` produz relatório idêntico — `qa-engineer`
+- [ ] **5.14** Revisão de segurança + LGPD: autenticação de dispositivo, rotação de chave, retenção de imagens (job de expurgo), placa de aviso de monitoramento, acesso às imagens auditado — `security-reviewer`
 
-- [ ] **6.1** Módulo `occupancy`: read model Redis, handlers de eventos, job de reconciliação — `backend-engineer`
-- [ ] **6.2** Gateway Socket.IO `/rt` com auth no handshake, salas e Redis adapter — `backend-engineer`
-- [ ] **6.3** Web: dashboard do gestor (ocupação por zona ao vivo, receita do dia, sessões abertas, tempo médio) com MUI + Recharts; mapa de vagas colorido por status — `web-engineer`
-- [ ] **6.4** Teste de integração WS (2 clientes, evento chega em < 2 s) — `qa-engineer`
+## Fase 6 — Pagamentos
 
-## Fase 7 — App do motorista · Marco M3
+- [ ] **6.1** Porta `PaymentProvider` + `FakeProvider` (simula webhook com atraso configurável) + `CashProvider` — `payments-engineer`
+- [ ] **6.2** Schema `payments`, `payment_attempts`, `webhook_events` — `database-engineer`
+- [ ] **6.3** `MercadoPagoPixProvider` (sandbox): criação de cobrança, webhook assinado, consulta de status — `payments-engineer`
+- [ ] **6.4** `StripeCardProvider` (test mode, Payment Intents) — `payments-engineer`
+- [ ] **6.5** Integração `payments` ↔ `sessions` via eventos; janela de saída; cobrança de diferença se expirar — `backend-engineer`
+- [ ] **6.6** Jobs `payments-reconcile` e estorno (parcial/total, auditado) — `payments-engineer`
+- [ ] **6.7** Recibo em PDF (worker → S3/minio local) e e-mail — `backend-engineer`
+- [ ] **6.8** Web: modal de cobrança com Pix (QR + copia e cola + polling/WS), cartão, dinheiro com troco — `web-engineer`
+- [ ] **6.9** Testes: webhook duplicado, fora de ordem, perdido, valor divergente — `qa-engineer`
+- [ ] **6.10** Revisão de segurança (assinaturas, idempotência, dados de cartão nunca tocam o servidor) — `security-reviewer`
 
-- [ ] **7.1** `apps/mobile` Expo + expo-router + React Native Paper (tema alinhado ao MUI), `packages/api-client` compartilhado — `mobile-engineer`
-- [ ] **7.2** Auth (SecureStore), cadastro, veículos (placas) — `mobile-engineer`
-- [ ] **7.3** Mapa com lots próximos (disponibilidade + preço estimado via `packages/pricing`), filtros (coberto, EV, PCD), detalhe do lot — `mobile-engineer`
-- [ ] **7.4** Ler QR do ticket → vincular sessão → acompanhar valor em tempo real → pagar com Pix/cartão (Stripe SDK) — `mobile-engineer`
-- [ ] **7.5** Push notifications (pagamento confirmado, janela de saída acabando) — `mobile-engineer`
-- [ ] **7.6** Histórico e recibos; exclusão de conta (LGPD) — `mobile-engineer`
-- [ ] **7.7** Fluxo Maestro: busca → abrir lot → pagar sessão (FakeProvider) — `qa-engineer`
-- [ ] **7.8** Build EAS (preview) + deploy de demo da API/web (Render/Fly) para portfólio — `devops-engineer`
+## Fase 7 — Tempo real & dashboard · Marco M3
 
-## Fase 8 — Reservas
+- [ ] **7.1** Módulo `occupancy`: read model Redis, handlers de eventos, job de reconciliação — `backend-engineer`
+- [ ] **7.2** Gateway Socket.IO `/rt` com auth no handshake, salas e Redis adapter — `backend-engineer`
+- [ ] **7.3** Web: dashboard do gestor (ocupação por zona ao vivo, receita do dia, sessões abertas, tempo médio) com MUI + Recharts; mapa de vagas colorido por status — `web-engineer`
+- [ ] **7.4** Teste de integração WS (2 clientes, evento chega em < 2 s) — `qa-engineer`
 
-- [ ] **8.1** Schema `reservations` com exclusion constraint (ADR-0010) — `database-engineer`
-- [ ] **8.2** Domínio + casos de uso (criar com hold, confirmar via pagamento, cancelar com política, check-in automático na entrada pela placa, no-show) — `backend-engineer`
-- [ ] **8.3** Teste de concorrência: 50 requisições simultâneas na mesma vaga/janela → exatamente 1 sucesso — `qa-engineer`
-- [ ] **8.4** Mobile: fluxo de reserva (escolher janela, pagar, ver QR) — `mobile-engineer`
-- [ ] **8.5** Web: agenda de reservas por lot (timeline) — `web-engineer`
+## Fase 8 — App do motorista · Marco M4
 
-## Fase 9 — Mensalistas & relatórios
+- [ ] **8.1** `apps/mobile` Expo + expo-router + React Native Paper (tema alinhado ao MUI), `packages/api-client` compartilhado — `mobile-engineer`
+- [ ] **8.2** Auth (SecureStore), cadastro, veículos (placas) — `mobile-engineer`
+- [ ] **8.3** Mapa com lots próximos (disponibilidade + preço estimado via `packages/pricing`), filtros (coberto, EV, PCD), detalhe do lot — `mobile-engineer`
+- [ ] **8.4** Ler QR do ticket → vincular sessão → acompanhar valor em tempo real → pagar com Pix/cartão (Stripe SDK) — `mobile-engineer`
+- [ ] **8.5** Push notifications (pagamento confirmado, janela de saída acabando) — `mobile-engineer`
+- [ ] **8.6** Histórico e recibos; exclusão de conta (LGPD) — `mobile-engineer`
+- [ ] **8.7** Fluxo Maestro: busca → abrir lot → pagar sessão (FakeProvider) — `qa-engineer`
+- [ ] **8.8** Build EAS (preview) + deploy de demo da API/web (Render/Fly) para portfólio — `devops-engineer`
 
-- [ ] **9.1** Schema e casos de uso de planos, assinaturas, placas autorizadas, faturas — `backend-engineer`
-- [ ] **9.2** Entrada de mensalista (flows.md §6) e bloqueio por inadimplência — `backend-engineer`
-- [ ] **9.3** Cobrança recorrente (Pix com vencimento / cartão salvo) — `payments-engineer`
-- [ ] **9.4** Read models de faturamento/ocupação (tabelas de projeção ou materialized views) + endpoints — `database-engineer`
-- [ ] **9.5** Web: gestão de mensalistas, relatórios com filtros, export CSV/PDF assíncrono — `web-engineer`
+## Fase 9 — Reservas
 
-## Fase 10 — Produção · Marco M4
+- [ ] **9.1** Schema `reservations` com exclusion constraint (ADR-0010) — `database-engineer`
+- [ ] **9.2** Domínio + casos de uso (criar com hold, confirmar via pagamento, cancelar com política, check-in automático na entrada pela placa, no-show) — `backend-engineer`
+- [ ] **9.3** Teste de concorrência: 50 requisições simultâneas na mesma vaga/janela → exatamente 1 sucesso — `qa-engineer`
+- [ ] **9.4** Mobile: fluxo de reserva (escolher janela, pagar, ver QR) — `mobile-engineer`
+- [ ] **9.5** Web: agenda de reservas por lot (timeline) — `web-engineer`
 
-- [ ] **10.1** Terraform: VPC, ECS Fargate (api, worker), RDS Postgres (PostGIS), ElastiCache, S3+CloudFront, ALB+WAF, Secrets Manager, ECR — `devops-engineer`
-- [ ] **10.2** CD com GitHub Actions via OIDC: build imagem, migrate one-off, deploy rolling, smoke test — `devops-engineer`
-- [ ] **10.3** OpenTelemetry + Sentry + dashboards e alertas (erro 5xx, fila atrasada, webhook falhando) — `devops-engineer`
-- [ ] **10.4** k6: pico de 40 sessões/s e 300 buscas/s; relatório no repo — `qa-engineer`
-- [ ] **10.5** Modo degradado do operador (fila IndexedDB + sync idempotente) — `web-engineer`
-- [ ] **10.6** Revisão final de segurança + checklist LGPD (política de privacidade, export/exclusão, retenção) — `security-reviewer`
-- [ ] **10.7** README de portfólio: arquitetura, decisões, GIFs, link da demo, como rodar — `architect`
+## Fase 10 — Mensalistas & relatórios
 
-## Fase 11 — Stretch (escolher)
+- [ ] **10.1** Schema e casos de uso de planos, assinaturas, placas autorizadas, faturas — `backend-engineer`
+- [ ] **10.2** Entrada de mensalista (flows.md §6) e bloqueio por inadimplência — `backend-engineer`
+- [ ] **10.3** Cobrança recorrente (Pix com vencimento / cartão salvo) — `payments-engineer`
+- [ ] **10.4** Read models de faturamento/ocupação (tabelas de projeção ou materialized views) + endpoints — `database-engineer`
+- [ ] **10.5** Web: gestão de mensalistas, relatórios com filtros, export CSV/PDF assíncrono — `web-engineer`
 
-- [ ] **11.1** Módulo `devices`: API de cancela (API key + HMAC), abertura remota auditada
-- [ ] **11.2** LPR: serviço Python (YOLO + OCR) consumindo imagem → evento `PlateRead` → entrada automática
-- [ ] **11.3** Sensores IoT de vaga (MQTT → AWS IoT Core → evento `SpotStatusChanged`)
-- [ ] **11.4** Precificação dinâmica sugerida por ocupação histórica
-- [ ] **11.5** Assistente com Claude para o gestor ("qual foi o horário de pico da semana?") usando tools sobre os read models
+## Fase 11 — Produção · Marco M5
+
+- [ ] **11.1** Terraform: VPC, ECS Fargate (api, worker), RDS Postgres (PostGIS), ElastiCache, S3+CloudFront, bucket de imagens LPR com lifecycle (expurgo), ALB+WAF, Secrets Manager, ECR — `devops-engineer`
+- [ ] **11.2** CD com GitHub Actions via OIDC: build imagem, migrate one-off, deploy rolling, smoke test — `devops-engineer`
+- [ ] **11.3** OpenTelemetry + Sentry + dashboards e alertas (erro 5xx, fila atrasada, webhook falhando, câmera offline, relatório diário não gerado) — `devops-engineer`
+- [ ] **11.4** k6: pico de 40 sessões/s, 300 buscas/s e ingestão de lotes de fim do dia de 500 estacionamentos em paralelo; relatório no repo — `qa-engineer`
+- [ ] **11.5** Modo degradado do operador (fila IndexedDB + sync idempotente) — `web-engineer`
+- [ ] **11.6** Revisão final de segurança + checklist LGPD (política de privacidade, export/exclusão, retenção) — `security-reviewer`
+- [ ] **11.7** README de portfólio: arquitetura, decisões, GIFs, link da demo, como rodar — `architect`
+
+## Fase 12 — Stretch (escolher)
+
+- [ ] **12.1** Integração com cancela: abrir a cancela automaticamente quando a leitura LPR confirmar entrada/saída permitida (reusa auth de dispositivo da Fase 5), abertura remota auditada
+- [ ] **12.2** Reconhecimento de veículo além da placa (cor/modelo) para reforçar o pareamento
+- [ ] **12.3** Sensores IoT de vaga (MQTT → AWS IoT Core → evento `SpotStatusChanged`)
+- [ ] **12.4** Precificação dinâmica sugerida por ocupação histórica
+- [ ] **12.5** Assistente com Claude para o gestor ("qual foi o horário de pico da semana?") usando tools sobre os read models

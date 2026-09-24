@@ -11,7 +11,7 @@ React Native Paper (Material 3, theme aligned with the web MUI tokens) + react-n
 ## Core journeys
 1. Find parking nearby on a map (availability + estimated price using `packages/pricing`), filter, open lot detail, navigate (deep link to Maps/Waze).
 2. Scan the ticket QR at entry → claim the session → watch amount in realtime → pay (Pix copy/paste + QR, or card via Stripe SDK) → exit window countdown.
-3. Reservations (Phase 8): choose window, pay, show QR.
+3. Reservations (Phase 9): choose window, pay, show QR.
 4. Profile: vehicles (plates), payment history/receipts, notification settings, delete account (LGPD).
 
 ## Rules
