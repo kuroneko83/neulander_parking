@@ -239,7 +239,9 @@ para a **fila de revisão** no painel. Detalhes em `flows.md` §7–8.
 | `enforced` | Saída só é considerada regular se a sessão estiver paga; saída sem pagamento vira exceção no relatório (e, com cancela na Fase 12, bloqueia a saída) |
 
 **Hardware e custos:** ver `docs/hardware/equipamentos-e-custos.md` (kit por estacionamento com 3 referências de preço por item).
-**Hardware de referência:** mini PC x86 (Intel N100, 16 GB) roda 1–2 câmeras RTSP a 5 fps com modelos ONNX em CPU;
+**Hardware alvo (plano econômico):** câmera comum com RTSP (TP-Link Tapo C320WS, ~R$ 330) + agente rodando no **PC do guichê**
+como serviço do Windows (ADR-0014), sem mini PC dedicado. Câmeras LPR dedicadas ficam como upgrade quando a acurácia medida não bastar.
+**Hardware de referência (dedicado):** mini PC x86 (Intel N100, 16 GB) roda 1–2 câmeras RTSP a 5 fps com modelos ONNX em CPU;
 para mais câmeras, Jetson Orin Nano. Câmera com lente adequada à faixa, iluminação IR para a noite, altura/ângulo conforme guia em `apps/edge-agent/README.md`.
 
 ### 7.8 Relatório diário para o dono

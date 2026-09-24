@@ -1,5 +1,8 @@
 # Equipamentos e custos — kit de câmera LPR por estacionamento
 
+> **Resumo:** o **plano econômico** custa de **R$ 400 a R$ 950** (reaproveitando o PC do guichê) ou **R$ 2.000 a R$ 2.900**
+> (com mini PC dedicado), contra R$ 8.700 a R$ 11.100 da opção profissional.
+>
 > **Cenário:** uma única câmera cobrindo a entrada e a saída (mesma faixa/portão), agente de borda num mini PC,
 > envio em tempo real ou no fim do dia, relatório por e-mail e WhatsApp.
 >
@@ -8,7 +11,48 @@
 > vendedor, frete e forma de pagamento. **Confirme cada link antes de comprar.** Onde não achei 3 referências confiáveis
 > do mesmo modelo, está indicado.
 
-## Opção A — Câmera com leitura de placa embarcada (recomendada para produção)
+## ⭐ Plano econômico (recomendado para começar)
+
+**Ideia:** o reconhecimento de placa é feito pelo **nosso software** (é justamente a Fase 5.8), então não precisamos pagar por
+uma câmera que já faz isso sozinha. Usamos uma câmera comum com boa imagem noturna, e o agente roda no **computador que já
+existe no guichê** ou num mini PC simples. Itens opcionais (roteador 4G, injetor PoE) saem: com o armazenamento local e o
+modo de envio no fim do dia, uma queda de internet não perde nenhuma leitura.
+
+| # | Item | Modelo sugerido | Referência 1 | Referência 2 | Referência 3 |
+|---|---|---|---|---|---|
+| 1 | **Câmera** 2K/4 MP, visão noturna colorida (starlight + holofote), porta Ethernet, **RTSP/ONVIF**, IP66, fonte 12 V inclusa | TP-Link **Tapo C320WS** | [R$ 332,40 — KaBuM](https://www.kabum.com.br/produto/365028/camera-de-seguranca-externa-tp-link-wifi-qhd-visao-noturna-colorida-branco-tapo-c320ws) | [R$ 378,00 — Mercado Livre](https://www.mercadolivre.com.br/cmera-wi-fi-de-seguranca-externa-tapo-c320ws-tp-link/p/MLB25762047) | [R$ 380,60 — Kalunga](https://www.kalunga.com.br/prod/camera-de-seguranca-externa-wifi-ip-tapo-c320ws-tpn0296-tp-link-cx-1-un/144286) · [R$ 398,00 — Amazon](https://www.amazon.com.br/C%C3%A2mera-Seguran%C3%A7a-Externa-C320WS-TP-Link/dp/B098TVZ6TS) |
+| 1b | *Alternativa com PoE (um cabo só para rede + energia, exige injetor ou switch PoE)* | Intelbras **VIP 1230 B G4** (2 MP, IR 30 m) | Faixa encontrada na busca: **R$ 218,50 a R$ 561,20** conforme a loja — ex.: [JS Distribuidor](https://www.distribuidorcftv.com.br/loja/produto-240387-4627-camera_bullet_infra_ip_hd_2_0_megapixels_2_8mm_poe_p67_onvif_h_265_intelbras_vip_1230_b_g4_black), [BDH Shop](https://www.bdhshop.com.br/vip-1230-b-black-g4), [JC Cabos](https://www.jccabos.com.br/camera-ip-2-mp-vip-1230-b-g4) *(preço por loja não identificado no resultado)* | | |
+| 2a | **Computador para o agente — reaproveitar o PC do guichê** (i3 6ª geração+ ou equivalente, 8 GB RAM, ligado durante o expediente) | já existente | **R$ 0** | | |
+| 2b | *ou* **Mini PC** dedicado Intel N100 | N100 8–16 GB | [R$ 1.289,90 — T8 Pro Plus 8/256, Mercado Livre](https://produto.mercadolivre.com.br/MLB-3466585959-intel-windows-mini-pc-n100-34ghz-256gb-ssd-8gb-t8-pro-plus-_JM) | [R$ 1.450,66 — Bosgame 16/512, Mercado Livre](https://www.mercadolivre.com.br/mini-pc-bosgame-n100-intel-12th-16gb-ram-512gb-ssd-windows-1/p/MLB2004255729) | [R$ 1.681,00 — Mitsushiba 8/256, Mercado Livre](https://www.mercadolivre.com.br/mini-pc-mitsushiba-intel-n100-12th-gen-8gb-ram-256gb-ssd-windows-11-pro/p/MLB47191376) |
+| 3 | **Nobreak 600 VA** (câmera + computador; se o PC do guichê já tem nobreak, pule) | Intelbras **XNB 600 VA** | [R$ 349,90 — Amazon (220 V)](https://www.amazon.com.br/Interactive-Intelbras-XNB-600VA-220V/dp/B07D7YDWC4) | R$ 369,00 — Mercado Livre (220 V, citado na busca) · [listagem](https://lista.mercadolivre.com.br/nobreak-intelbras-600va) | R$ 375,00 — Amazon (120 V, citado na busca) · [produto](https://www.amazon.com.br/Nobreak-Interactive-XNB-600VA-Intelbras/dp/B07D7Y9NMG) |
+| 4 | Cabo de rede externo (até ~20 m), extensão para a fonte 12 V, abraçadeiras, suporte | — | *Estimativa sem referência: R$ 50 – 150* | | |
+| 5 | Placa de aviso "ambiente monitorado por câmeras" (LGPD) | PVC 20×30 cm | ~R$ 15 (ver Opção A) | | |
+| 6 | Instalação | faça você mesmo (ou um ajudante) | *R$ 0 – 300* | | |
+
+**Total do plano econômico:**
+
+| Cenário | Total aproximado | Economia vs. Opção A (R$ 8.700 – 11.100) |
+|---|---|---|
+| **Mínimo:** câmera + PC do guichê + cabos + placa (sem nobreak novo) | **R$ 400 – 560** | ~95% |
+| **Mínimo com nobreak** | **R$ 750 – 950** | ~90% |
+| **Com mini PC dedicado novo** | **R$ 2.000 – 2.900** | ~70–75% |
+
+> Caminho mais barato para validar: compre **só a câmera (~R$ 330)**, rode o agente no PC do guichê por 1–2 semanas e
+> meça a acurácia no relatório de avaliação (tarefa 5.8). Só então decida se precisa de mini PC, nobreak ou câmera melhor.
+
+### O que se perde no plano econômico (e como compensar)
+
+| Limitação | Impacto | Como compensar |
+|---|---|---|
+| Lente fixa grande-angular (sem zoom) | A placa sai pequena se a câmera estiver longe | Instalar **perto do ponto em que o carro para ou desacelera: 2,5 a 4 m**, na altura de 1,5 a 2,5 m. Meta: placa com **≥ 120 px de largura** na imagem |
+| Sem controle de obturador | Carro em movimento rápido fica borrado | Ponto de leitura na cancela, lombada ou faixa de parada (carro quase parado). O agente vota entre vários frames e escolhe o mais nítido |
+| Noite: infravermelho estoura o reflexo da placa | Leitura noturna pior | Usar o **modo colorido com holofote** da C320WS em vez do IR, ou uma luminária LED branca comum apontada para a faixa (~R$ 50) |
+| Câmera de linha doméstica | Menos robusta que linha profissional | IP66 atende área externa coberta ou semi-coberta. Evitar sol direto na lente |
+| Tapo limita streams simultâneos | RTSP pode ser desativado se usar nuvem + cartão SD + RTSP ao mesmo tempo | Usar só **RTSP** (e, se quiser, cartão SD). Não assinar a nuvem Tapo |
+| PC do guichê desligado à noite | Sem leituras fora do expediente | Configurar o PC para ligar sozinho após queda de energia e não desligar, ou usar mini PC dedicado |
+| Acurácia menor que câmera LPR dedicada | Mais leituras na fila de revisão | Fila de revisão no painel (1 clique) + pareamento com caracteres confundíveis. Se passar de ~10% de revisão, trocar só a câmera pela da Opção A (o resto do sistema não muda) |
+
+## Opção A — Câmera com leitura de placa embarcada (profissional, maior acurácia)
 
 A câmera já reconhece a placa (carros e motos, padrão Mercosul) e manda o evento para o agente de borda. O agente
 guarda tudo localmente, define a direção (entrada/saída) e envia para a nuvem. Maior acurácia e menos ajuste fino.
@@ -28,7 +72,7 @@ guarda tudo localmente, define a direção (entrada/saída) e envia para a nuvem
 **Total da Opção A (por estacionamento):** aproximadamente **R$ 8.700 a R$ 11.100** com a VIP 5460 LPR IA.
 Com a VIP 7250 LPR IA FT G2 no lugar, some cerca de R$ 2.000 a R$ 2.900.
 
-## Opção B — Câmera IP comum + reconhecimento feito pelo nosso agente (piloto / portfólio)
+## Opção B — Câmera IP varifocal + reconhecimento pelo nosso agente (intermediária)
 
 Mais barata. O reconhecimento de placa roda no mini PC (pipeline próprio: detecção + OCR + rastreamento). Acurácia
 depende muito do ângulo, da luz e do ajuste do modelo, e dá mais trabalho de desenvolvimento, mas é a parte mais
@@ -49,22 +93,25 @@ interessante tecnicamente para o portfólio.
 
 | Item | Estimativa | Observação |
 |---|---|---|
-| Chip de dados 4G (contingência) | ~R$ 30 – 60/mês | Só se usar o roteador 4G. Envio no fim do dia consome pouco (recortes JPEG de ~60 KB por leitura) |
+| Chip de dados 4G (contingência) | R$ 0 no plano econômico · ~R$ 30 – 60/mês se usar o roteador 4G | Opcional: o armazenamento local já protege contra queda de internet. Envio no fim do dia consome pouco (recortes JPEG de ~60 KB por leitura) |
 | WhatsApp (relatório diário) | ~R$ 0,04 – 0,05 por mensagem utilitária ([fonte](https://www.messagecentral.com/blog/whatsapp-business-api-pricing-brazil)) → ~R$ 1,50/mês por destinatário | Tabela oficial: [Meta — preços da WhatsApp Business Platform](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing). Desde jul/2026 há cobrança em BRL |
 | E-mail (Amazon SES) | centavos/mês | — |
 | Nuvem (API, banco, armazenamento de imagens) | ver `infra/terraform/README.md` (Fase 11) | Compartilhado entre todos os estacionamentos |
 
 ## Recomendação
 
-- **Estacionamento real (cliente pagante):** use a **Opção A com a VIP 5460 LPR IA**. É mais barata que a 7250, tem
-  4 MP (ajuda a cobrir a faixa inteira com uma câmera só) e reconhece carros e motos.
-- **Desenvolvimento e demo do portfólio:** comece **sem hardware**, com o simulador do agente (Fase 5.7). Depois
-  compre só a câmera da Opção B + mini PC para validar o pipeline próprio.
+1. **Desenvolvimento:** comece **sem hardware**, com o simulador do agente (Fase 5.7).
+2. **Primeiro estacionamento:** **plano econômico mínimo** — Tapo C320WS + PC do guichê (**~R$ 400 – 950**).
+3. **Se a acurácia medida não bastar** (muitas leituras em revisão, principalmente à noite): troque **só a câmera** pela
+   Intelbras VIP 5460 LPR IA (Opção A). O agente já suporta os dois tipos de câmera, então nada mais muda.
+4. **Vários estacionamentos / cliente exigente:** Opção A com mini PC dedicado.
 
 ## Requisitos de instalação para uma câmera só (entrada + saída)
 
-- Instalar a câmera **de frente para os carros que entram**, na altura de 1,5–3 m, com ângulo horizontal ≤ 30° em relação à faixa
-  e a 5–10 m do ponto onde o carro desacelera (cancela, lombada ou faixa de parada).
+- Instalar a câmera **de frente para os carros que entram**, com ângulo horizontal ≤ 30° em relação à faixa, apontada para o
+  ponto onde o carro desacelera (cancela, lombada ou faixa de parada). Distância: **2,5–4 m** e altura de 1,5–2,5 m para câmeras de
+  lente fixa (plano econômico); 5–10 m e altura de 1,5–3 m para câmeras LPR/varifocais (Opções A e B).
+- Ligar a câmera **por cabo de rede**, não por Wi-Fi (a Tapo C320WS tem as duas opções).
 - Os carros que entram mostram a **placa dianteira**; os que saem, a **placa traseira**. Carros no Brasil têm as duas,
   então a mesma câmera lê os dois sentidos.
 - ⚠️ **Motos só têm placa traseira**: com a câmera de frente para quem entra, a entrada da moto não é lida (a saída é).

@@ -12,7 +12,8 @@ and the device endpoints in `docs/architecture/api-and-events.md`.
 
 ## Stack
 Python 3.12 · `uv` · OpenCV · ONNX Runtime (CPU by default; TensorRT/CUDA optional on Jetson) · Pydantic v2 · httpx ·
-SQLite (stdlib `sqlite3`, WAL mode) · structlog · pytest · ruff · mypy `--strict`. Distributed as a multi-arch Docker image.
+SQLite (stdlib `sqlite3`, WAL mode) · structlog · pytest · ruff · mypy `--strict`. Distributed as a multi-arch Docker image **and** as a native Windows service (ADR-0014) so it can run on the
+lot's existing front-desk PC. Reference camera for the budget kit: TP-Link Tapo C320WS (RTSP `stream1`/`stream2`, fixed wide lens).
 
 ## Layout
 ```
@@ -43,7 +44,10 @@ apps/edge-agent/
 - Only plate and vehicle crops leave the device — no full frames or video. Camera RTSP URL/credentials stay local (env), never sent to the API or logged.
 - The simulator source must allow full end-to-end runs without a camera (image folder or video file + synthetic timestamps, including a "full day" script).
 - Contracts are generated from `packages/contracts` (`pnpm contracts:jsonschema` → `datamodel-code-generator`); a test fails if they are stale.
-- Resource-aware: target 1–2 RTSP cameras at 5 fps on an Intel N100 CPU; measure and report per-stage latency.
+- Resource-aware: target 1–2 RTSP cameras at 5 fps on an Intel N100 CPU; on a shared Windows front-desk PC default to 3 fps,
+  one inference thread, motion-gated processing, and stay under 50% CPU. Measure and report per-stage latency on both.
+- Cross-platform: no Linux-only assumptions (use `pathlib`, data dir `%PROGRAMDATA%\NeulanderEdge` on Windows); survive PC reboots and Windows updates.
+- Budget cameras have fixed wide lenses and no shutter control: pick the sharpest frames (blur metric) before OCR and reject plates narrower than the configured minimum pixel width.
 
 ## Tests & evaluation
 - Unit: plate format/normalization, voting, tracker direction, HMAC signing, store state transitions, upload scheduling (fake clock).
