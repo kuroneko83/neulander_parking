@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.expo/
+*.log
+.env
+.env.*.local
+!.env.example
+.DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+.claude/settings.local.json
+playwright-report/
+test-results/
