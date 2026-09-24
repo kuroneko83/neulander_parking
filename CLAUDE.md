@@ -1,7 +1,7 @@
 # CLAUDE.md — Neulander Parking
 
 Plataforma de estacionamentos: **câmera com leitura de placa (LPR)** que registra a hora de entrada e saída de cada
-carro e gera um **relatório diário para o dono** + **painel web** para operadores/gestores (entrada/saída, tarifas,
+carro com **uma única câmera** e gera um **relatório diário para o dono (e-mail + WhatsApp)** + **painel web** para operadores/gestores (entrada/saída, tarifas,
 mensalistas, relatórios) + **app mobile** para motoristas (buscar vagas, reservar, pagar, ticket digital).
 Projeto de portfólio fullstack — qualidade de código, testes e documentação importam tanto quanto features.
 
@@ -16,6 +16,7 @@ Projeto de portfólio fullstack — qualidade de código, testes e documentaçã
 | `docs/architecture/flows.md` | Antes de implementar check-in/out, pagamento, reserva |
 | `docs/adr/` | Decisões já tomadas — não reabra sem criar um novo ADR |
 | `docs/domain/glossary.md` | Termos de domínio pt-BR ↔ nomes no código (en) |
+| `docs/hardware/equipamentos-e-custos.md` | Antes de mexer no agente de borda/instalação: kit de câmera, limitações da câmera única, custos |
 
 ## Stack
 
@@ -134,5 +135,6 @@ auth/pagamentos/autenticação de dispositivos/imagens, rode `security-reviewer`
 - Não altere migration já aplicada — crie uma nova.
 - Não mocke o banco em teste de integração; use Testcontainers.
 - Não edite à mão os modelos Pydantic em `apps/edge-agent/src/edge_agent/contracts/` — são gerados.
+- Não use bibliotecas não oficiais de WhatsApp — só a Cloud API da Meta (ADR-0013).
 - Não coloque segredo em código; use `.env` (há `.env.example`) e Secrets Manager em produção.
 - Não pule fases do ULTRAPLAN sem registrar o motivo no próprio arquivo.

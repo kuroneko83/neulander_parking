@@ -54,7 +54,7 @@ erDiagram
 ### facilities
 | Tabela | Colunas principais | Índices / restrições |
 |---|---|---|
-| `parking_lots` | id, organization_id, name, slug, address jsonb, location geography(Point,4326), timezone, opening_hours jsonb, total_capacity, status (`draft`\|`published`\|`closed`), amenities text[], **lpr_mode (`off`\|`record_only`\|`enforced`)**, **business_day_cutoff time (padrão 23:59)**, **report_recipients citext[]**, **image_retention_days (padrão 30)**, archived_at | GiST(location), unique(organization_id, slug) |
+| `parking_lots` | id, organization_id, name, slug, address jsonb, location geography(Point,4326), timezone, opening_hours jsonb, total_capacity, status (`draft`\|`published`\|`closed`), amenities text[], **lpr_mode (`off`\|`record_only`\|`enforced`)**, **business_day_cutoff time (padrão 23:59)**, **image_retention_days (padrão 30)**, archived_at | GiST(location), unique(organization_id, slug) |
 | `zones` | id, parking_lot_id, name, level, kind (`general`\|`pcd`\|`elderly`\|`ev`\|`moto`\|`vip`) | |
 | `spots` | id, zone_id, parking_lot_id, code, kind, status (`free`\|`occupied`\|`reserved`\|`blocked`), reservable bool, archived_at | unique(parking_lot_id, code), index(parking_lot_id, status) |
 
@@ -72,8 +72,14 @@ erDiagram
 ### lpr (câmeras e leituras de placa)
 | Tabela | Colunas principais | Índices / restrições |
 |---|---|---|
-| `devices` | id, organization_id, parking_lot_id, name, kind (`lpr_camera`\|`gate` futuro), source (`rtsp`\|`anpr_push`\|`simulator`), lane (`entry`\|`exit`\|`bidirectional`), upload_mode (`realtime`\|`end_of_day`), api_key_prefix, api_key_hash, hmac_secret_encrypted, config jsonb (ROI, linha virtual, limiar de confiança, fps), status (`active`\|`disabled`), agent_version, last_seen_at, last_synced_until, clock_skew_ms | unique(api_key_prefix), index(parking_lot_id) |
-| `plate_reads` | **id (UUID v7 gerado no agente)**, organization_id, parking_lot_id, device_id, captured_at, received_at, plate_raw, plate_normalized, confidence numeric(4,3), candidates jsonb (top-N com confiança), direction (`in`\|`out`\|`unknown`), plate_image_key?, vehicle_image_key?, status (`pending`\|`matched`\|`duplicate`\|`needs_review`\|`corrected`\|`ignored`), session_id?, corrected_plate?, reviewed_by?, reviewed_at?, review_reason? | PK(id) = idempotência; index(parking_lot_id, captured_at); index(parking_lot_id, plate_normalized, captured_at); index(parking_lot_id, status) WHERE status = 'needs_review'; trigram(plate_normalized) |
+| `devices` | id, organization_id, parking_lot_id, name, kind (`lpr_camera`\|`gate` futuro), source (`rtsp`\|`anpr_push`\|`simulator`), lane (`bidirectional` padrão \|`entry`\|`exit`), direction_hint jsonb (linha virtual + qual lado é "dentro"), upload_mode (`realtime`\|`end_of_day`), api_key_prefix, api_key_hash, hmac_secret_encrypted, config jsonb (ROI, linha virtual, limiar de confiança, fps), status (`active`\|`disabled`), agent_version, last_seen_at, last_synced_until, clock_skew_ms | unique(api_key_prefix), index(parking_lot_id) |
+| `plate_reads` | **id (UUID v7 gerado no agente)**, organization_id, parking_lot_id, device_id, captured_at, received_at, plate_raw, plate_normalized, confidence numeric(4,3), candidates jsonb (top-N com confiança), direction (`in`\|`out`\|`unknown`), direction_source (`camera`\|`tracker`\|`server_inferred`), vehicle_type (`car`\|`motorcycle`\|`truck`\|`unknown`), plate_image_key?, vehicle_image_key?, status (`pending`\|`matched`\|`duplicate`\|`needs_review`\|`corrected`\|`ignored`), session_id?, corrected_plate?, reviewed_by?, reviewed_at?, review_reason? | PK(id) = idempotência; index(parking_lot_id, captured_at); index(parking_lot_id, plate_normalized, captured_at); index(parking_lot_id, status) WHERE status = 'needs_review'; trigram(plate_normalized) |
+
+### notifications
+| Tabela | Colunas principais | Índices / restrições |
+|---|---|---|
+| `report_recipients` | id, organization_id, parking_lot_id, name, channel (`email`\|`whatsapp`), address (e-mail ou telefone E.164), wants_daily_report bool, wants_alerts bool, opt_in_at, opt_in_evidence jsonb, verified_at, active | unique(parking_lot_id, channel, address) |
+| `notification_deliveries` | id, notification_id, recipient_id, channel, provider_message_id, status (`queued`\|`sent`\|`delivered`\|`read`\|`failed`), error_code, updated_at | unique(channel, provider_message_id) |
 
 ### reporting
 | Tabela | Colunas principais | Índices / restrições |

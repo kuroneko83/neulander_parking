@@ -19,7 +19,7 @@
 | 2 | Estacionamentos & vagas | Gestor cadastra lot, zonas, vagas no painel com mapa | — |
 | 3 | Motor de tarifação | Gestor cria tabela de preço e simula | — |
 | 4 | Sessões (entrada/saída) | Operador registra entrada/saída e cobra em dinheiro | **M1 — Operação básica** |
-| 5 | Câmera LPR & relatório diário | Câmera lê placas na entrada/saída (tempo real ou lote no fim do dia) e o dono recebe o relatório diário | **M2 — Controle automático** |
+| 5 | Câmera LPR & relatório diário | Uma câmera lê placas na entrada e saída (tempo real ou lote no fim do dia) e o dono recebe o relatório diário por e-mail e WhatsApp | **M2 — Controle automático** |
 | 6 | Pagamentos | Pix e cartão com webhook, recibo | — |
 | 7 | Tempo real & dashboard | Ocupação ao vivo e KPIs do dia | **M3 — Painel completo** |
 | 8 | App do motorista | Busca no mapa, ticket via QR, pagar pelo app | **M4 — MVP público** |
@@ -90,10 +90,12 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 
 Objetivo: a câmera na entrada/saída lê a placa, o sistema marca **hora de entrada e de saída** de cada carro
 automaticamente (em **tempo real** ou enviando **em lote no fim do dia**) e o dono recebe um **relatório diário**.
-Desenho completo: `system-design.md` §7.7, `flows.md` §7–9, ADR-0011 e ADR-0012.
+Configuração padrão: **uma única câmera para entrada e saída**; relatório por **e-mail e WhatsApp**.
+Desenho completo: `system-design.md` §7.7–7.8, `flows.md` §7–9, ADR-0011, ADR-0012 e ADR-0013.
+Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md`.
 
 - [ ] **5.1** Contracts: `PlateReadInput` (lote), `DeviceHeartbeat`, `DeviceConfig`, `DailyReportSummary`; export JSON Schema dos contratos para o agente Python (`pnpm contracts:jsonschema`) — `architect`
-- [ ] **5.2** Schema `devices`, `plate_reads`, `daily_reports`; colunas novas em `parking_sessions` (`entry_read_id`, `exit_read_id`, `settlement_status`) e `parking_lots` (`lpr_mode`, `business_day_cutoff`, `report_recipients`) — `database-engineer`
+- [ ] **5.2** Schema `devices`, `plate_reads`, `daily_reports`; colunas novas em `parking_sessions` (`entry_read_id`, `exit_read_id`, `settlement_status`) e `parking_lots` (`lpr_mode`, `business_day_cutoff`, `image_retention_days`); `report_recipients`, `notification_deliveries`; `plate_reads.vehicle_type` e `direction_source` — `database-engineer`
 - [ ] **5.3** Módulo `lpr`: cadastro de câmera (gera API key exibida uma única vez), autenticação de dispositivo (API key + assinatura HMAC com timestamp), `heartbeat` que devolve config — `backend-engineer`
 - [ ] **5.4** Ingestão `POST /v1/devices/reads` em lote (até 500), idempotente pelo `id` gerado na borda, + URLs pré-assinadas para as imagens (S3/minio) — `backend-engineer`
   - Aceite: reenviar o mesmo lote 3× não duplica nada; leituras chegando fora de ordem geram o mesmo resultado.
@@ -101,14 +103,17 @@ Desenho completo: `system-design.md` §7.7, `flows.md` §7–9, ADR-0011 e ADR-0
   - Aceite: ≥ 30 cenários tabulares (saída sem entrada, entrada sem saída, placa lida errada 1 caractere, mesma placa volta no dia, lote do fim do dia chegando depois de leituras em tempo real, virada da meia-noite).
 - [ ] **5.6** Integração `lpr` → `sessions`: leitura de entrada abre sessão (`entry_channel = lpr`), leitura de saída fecha com `amount_due_cents` calculado; modo `record_only` vs `enforced` (flows.md §7) — `backend-engineer`
 - [ ] **5.7** `apps/edge-agent` (Python): config, fontes de imagem plugáveis (**simulador** com pasta de imagens/vídeo, RTSP, câmera ANPR via push HTTP), armazenamento local SQLite (store-and-forward), uploader com modos `realtime` e `end_of_day`, heartbeat, retry com backoff — `vision-engineer`
-- [ ] **5.8** Pipeline de reconhecimento: captura RTSP → gatilho de movimento/ROI → detecção de veículo e placa (ONNX) → OCR de placa Mercosul/antiga → rastreamento (direção entrada/saída na mesma faixa) → votação entre frames → leitura final com confiança — `vision-engineer`
-  - Aceite: script de avaliação em dataset de exemplo reporta acurácia por placa (meta ≥ 95% de dia, ≥ 90% à noite) e latência por frame no hardware alvo.
-- [ ] **5.9** Adapter para câmeras com LPR embarcado (ex.: Intelbras/Hikvision ANPR enviando evento HTTP): só normaliza e encaminha, sem rodar o modelo — `vision-engineer`
+- [ ] **5.8** Pipeline de reconhecimento: captura RTSP → gatilho de movimento/ROI → detecção de veículo e placa (ONNX) → OCR de placa Mercosul/antiga → rastreamento (direção entrada/saída com **câmera única**: linha virtual + variação do tamanho da placa) → votação entre frames → leitura final com confiança e tipo de veículo — `vision-engineer`
+  - Aceite: script de avaliação em dataset de exemplo reporta acurácia por placa (meta ≥ 95% de dia, ≥ 90% à noite), **acerto de direção ≥ 98%** com câmera única, e latência por frame no hardware alvo.
+- [ ] **5.9** Adapter para câmeras com LPR embarcado (ex.: Intelbras/Hikvision ANPR enviando evento HTTP): normaliza e encaminha; em paralelo o agente lê o RTSP da mesma câmera em baixa taxa só para determinar a direção quando o evento não trouxer sentido — `vision-engineer`
 - [ ] **5.10** Web: cadastro/gestão de câmeras (status online/offline, última sincronização, modo), feed ao vivo de leituras com miniatura (WS), **fila de revisão** para leituras de baixa confiança ou sem par (corrigir placa com 1 clique) — `web-engineer`
-- [ ] **5.11** Relatório diário: job por estacionamento no horário de corte → espera sincronização das câmeras (máx. 2 h) → gera resumo + **PDF e CSV** → e-mail para o dono/gestores + página no painel; regenerar sob demanda se chegar leitura atrasada — `backend-engineer`
+- [ ] **5.11** Relatório diário: job por estacionamento no horário de corte → espera sincronização das câmeras (máx. 2 h) → gera resumo + **PDF e CSV** → envia por **e-mail e WhatsApp** aos destinatários ativos + página no painel; regenerar sob demanda se chegar leitura atrasada — `backend-engineer`
 - [ ] **5.12** Web: página "Relatórios diários" (lista por dia, resumo, gráfico entradas/saídas por hora, tabela placa/entrada/saída/permanência/valor, exceções, download PDF/CSV) — `web-engineer`
 - [ ] **5.13** E2E: simulador reproduz um dia de leituras em modo `end_of_day` → relatório gerado confere com o gabarito esperado; o mesmo dia em `realtime` produz relatório idêntico — `qa-engineer`
-- [ ] **5.14** Revisão de segurança + LGPD: autenticação de dispositivo, rotação de chave, retenção de imagens (job de expurgo), placa de aviso de monitoramento, acesso às imagens auditado — `security-reviewer`
+- [ ] **5.14** Canal WhatsApp: adapter `WhatsAppCloudChannel` (Cloud API da Meta), templates `relatorio_diario_v1` e `alerta_camera_offline_v1`, envio do PDF como documento, webhook de status, opt-in/verificação e "PARAR"; cadastro de destinatários (e-mail/WhatsApp) no painel com status de entrega — `backend-engineer` + `web-engineer` (ADR-0013)
+  - Aceite: com `FakeChannel`, relatório gerado é enviado aos dois canais; falha simulada no WhatsApp não impede o e-mail; destinatário sem opt-in não recebe.
+- [ ] **5.15** Setup operacional do WhatsApp (conta Meta Business verificada, número dedicado, aprovação dos templates) + guia de instalação física da câmera única (`apps/edge-agent/INSTALL.md`, baseado em `docs/hardware/equipamentos-e-custos.md`) — `devops-engineer`
+- [ ] **5.16** Revisão de segurança + LGPD: autenticação de dispositivo, rotação de chave, retenção de imagens (job de expurgo), placa de aviso de monitoramento, acesso às imagens auditado, token e webhook do WhatsApp, opt-in e telefones mascarados em logs — `security-reviewer`
 
 ## Fase 6 — Pagamentos
 

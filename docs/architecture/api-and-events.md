@@ -90,7 +90,12 @@ Autenticação: `Authorization: Device <apiKey>` + `X-Signature: t=<unix>,v1=<hm
 | GET | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date` | owner, manager — resumo + lista de veículos |
 | GET | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date/download?format=pdf\|csv` | owner, manager — redirect para URL assinada |
 | POST | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date/regenerate` | owner, manager |
-| PATCH | `/v1/orgs/:orgId/lots/:lotId/report-settings` | owner — horário de corte, destinatários, retenção de imagens |
+| PATCH | `/v1/orgs/:orgId/lots/:lotId/report-settings` | owner — horário de corte, retenção de imagens |
+| GET/POST | `/v1/orgs/:orgId/lots/:lotId/report-recipients` | owner — destinatários (e-mail/WhatsApp), preferências de relatório/alertas |
+| POST | `/v1/orgs/:orgId/report-recipients/:id/verify` | owner — envia código de verificação (e-mail) ou mensagem de opt-in (WhatsApp) |
+| DELETE | `/v1/orgs/:orgId/report-recipients/:id` | owner |
+| POST | `/v1/orgs/:orgId/lots/:lotId/daily-reports/:date/resend` | owner, manager — reenviar para todos ou um destinatário |
+| GET/POST | `/v1/webhooks/whatsapp` | Meta — verificação (GET) e status de entrega/respostas (POST, `X-Hub-Signature-256`) |
 
 ### Reservations (Fase 9)
 `POST /v1/lots/:lotId/reservations` · `GET /v1/me/reservations` · `POST /v1/me/reservations/:id/cancel` · `GET /v1/orgs/:orgId/lots/:lotId/reservations`
@@ -132,7 +137,7 @@ Envelope: `{ id, type, version, occurredAt, aggregateId, organizationId, payload
 | `lpr.plate_read_matched.v1` | lpr | sessions (abre/fecha sessão com horário da leitura), occupancy |
 | `lpr.review_required.v1` | lpr | occupancy (WS para o painel), notifications (resumo ao gestor se a fila crescer) |
 | `lpr.device_offline.v1` | lpr (job) | notifications (alerta ao gestor/dono), reporting (aviso no relatório) |
-| `reporting.daily_report_ready.v1` | reporting | notifications (e-mail para `report_recipients`) |
+| `reporting.daily_report_ready.v1` | reporting | notifications (e-mail + WhatsApp para `report_recipients` ativos) |
 | `reservations.reservation_confirmed.v1` | reservations | facilities (vaga `reserved` na janela), notifications |
 | `reservations.reservation_expired.v1` | reservations (job) | facilities, notifications |
 | `subscriptions.subscription_past_due.v1` | subscriptions | notifications, sessions (bloqueia entrada como mensalista) |
@@ -146,7 +151,7 @@ Envelope: `{ id, type, version, occurredAt, aggregateId, organizationId, payload
 | `reservations-expire` | 1 min | Expira holds não pagos e marca no-show |
 | `lpr-match` | contínuo (fila por lot, concorrência 1 por lot) | Pareia leituras em ordem de `captured_at` |
 | `device-offline-check` | 2 min | Marca câmera offline sem heartbeat há > 5 min |
-| `daily-report` | por lot, no `business_day_cutoff` local | Espera sync (máx. 2 h) → agrega → PDF/CSV → e-mail |
+| `daily-report` | por lot, no `business_day_cutoff` local | Espera sync (máx. 2 h) → agrega → PDF/CSV → e-mail + WhatsApp |
 | `lpr-image-purge` | diário | Expurga imagens além de `image_retention_days` |
 | `occupancy-reconcile` | 5 min | Recalcula contadores Redis a partir do Postgres |
 | `subscriptions-billing` | diário 03:00 local | Gera faturas e marca inadimplência |

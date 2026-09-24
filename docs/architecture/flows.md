@@ -173,9 +173,13 @@ Para cada leitura, em ordem de `captured_at` dentro do estacionamento:
    - busca sessão aberta pela placa exata; se não houver, tenta variações de caracteres confundíveis
      (O↔0, I↔1, B↔8, S↔5, Z↔2, G↔6, D↔0) e distância de edição ≤ 1 entre as sessões abertas do lot;
    - exatamente um candidato → fecha a sessão; zero ou vários → `needs_review` com os candidatos sugeridos.
-5. **Direção `unknown`** (câmera bidirecional sem rastreamento conclusivo): se há sessão aberta da placa → trata como saída; senão → entrada.
+5. **Direção `unknown`** (câmera única sem sentido conclusivo): se há sessão aberta da placa → trata como saída; senão → entrada
+   (`direction_source = server_inferred`). Direção informada pela câmera/rastreador que contradiz o estado (ex.: "entrada" com
+   sessão aberta há 2 min) → `needs_review`.
 6. **Leitura atrasada** (chega depois de leituras posteriores já processadas): reprocessa a partir do `captured_at` dela
    para aquela placa; se o dia já teve relatório, marca o relatório para nova versão.
+7. **Moto saindo sem entrada** (`vehicle_type = motorcycle`, câmera única): cria sessão retroativa sem horário de entrada, marcada
+   `missing_entry_expected`; aparece no relatório como exceção esperada, não vai para a fila de revisão.
 
 Revisão humana (`/plate-reads/:id/review`): corrigir a placa re-executa o pareamento para aquela leitura; tudo auditado.
 
@@ -200,7 +204,13 @@ sequenceDiagram
   R->>S3: PDF + CSV
   R->>R: daily_reports (ready, version n) + outbox(daily_report_ready)
   R->>N: daily_report_ready
-  N->>D: e-mail "Resumo do dia 24/09 — 312 entradas, 298 saídas, R$ 4.870 calculados, 14 ainda no pátio, 3 exceções" + links
+  par para cada destinatário ativo
+    N->>D: e-mail (PDF anexo + link CSV)
+  and
+    N->>D: WhatsApp (template utility + PDF como documento)
+  end
+  Note over N,D: status de entrega via webhook (SES / Meta)
+  Note over N,D: texto: "Resumo do dia 24/09 — 312 entradas, 298 saídas, R$ 4.870 calculados, 14 ainda no pátio, 3 exceções"
 ```
 
 Conteúdo do relatório:

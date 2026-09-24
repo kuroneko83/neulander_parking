@@ -39,6 +39,8 @@
 | Horário de corte / Fechamento | `businessDayCutoff` | Hora em que o dia operacional fecha e o relatório é gerado |
 | Relatório diário | `DailyReport` | Resumo do dia enviado ao dono (entradas/saídas por placa, permanência, faturamento, exceções) |
 | Modo LPR | `lprMode` (`off` / `record_only` / `enforced`) | Se a câmera só registra ou também exige pagamento para a saída ser regular |
+| Câmera única / bidirecional | `lane = bidirectional` | Uma câmera na faixa lê quem entra (placa dianteira) e quem sai (placa traseira) |
+| Destinatário do relatório | `ReportRecipient` | Pessoa que recebe o relatório por e-mail ou WhatsApp (com opt-in) |
 | Saída sem pagamento | `settlementStatus.unpaid_exit` | Veículo saiu (lido pela câmera) sem sessão paga |
 | Placa Mercosul | `ABC1D23` | Formato atual; antigo `ABC1234`. Ambos via `normalizePlate()` |
 | Pix copia e cola | `pix.copyPaste` | Código EMV do Pix |

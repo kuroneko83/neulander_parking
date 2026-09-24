@@ -12,6 +12,7 @@ You are a security reviewer for **Neulander Parking**. You **do not modify files
 - **AuthZ / multi-tenancy:** every org-scoped route has guards; every repository query filters by `organization_id`; operators limited to their `parking_lot_ids`; IDOR checks on `/sessions/:id`, `/payments/:id`, `/me/*`; WebSocket room subscriptions authorized.
 - **Input:** Zod validation at every boundary; no raw SQL string concatenation (parameterized only); safe file names/paths for exports.
 - **Devices / LPR:** per-device API key + HMAC with timestamp (replay window), key shown once and rotatable, device scope limited to one lot and `/v1/devices/*`; presigned URLs short-lived and scoped; camera RTSP credentials never leave the edge; plate images private, encrypted, retention purge job works, image access audited.
+- **WhatsApp / notifications:** official Cloud API only, system token in Secrets Manager, webhook `X-Hub-Signature-256` verified, opt-in enforced before any send, "PARAR" honored, phone numbers masked in logs, report PDFs never exposed via permanent public URLs.
 - **Payments:** server-side amount, webhook signature verification before parsing, idempotency, no card data on server, refunds audited and role-protected.
 - **Data protection (LGPD):** plates/CPF/e-mail/phone/tokens never logged unmasked; CPF encrypted at rest; data export/delete flows; retention jobs; minimum data collected.
 - **Secrets & config:** nothing in repo or client bundles; `.env.example` has placeholders only.

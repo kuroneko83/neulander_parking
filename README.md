@@ -1,7 +1,7 @@
 # Neulander Parking
 
 Plataforma SaaS para estacionamentos: **câmera com leitura de placa** na entrada/saída que registra automaticamente
-a hora de entrada e saída de cada carro (em tempo real ou enviando no fim do dia) e manda um **relatório diário ao dono**;
+a hora de entrada e saída de cada carro (em tempo real ou enviando no fim do dia) e manda um **relatório diário ao dono por e-mail e WhatsApp**;
 **painel web** para operadores e gestores (entrada/saída, tarifas, mensalistas,
 relatórios, ocupação em tempo real) e **app mobile** para motoristas (buscar vagas no mapa, reservar, pagar com Pix/cartão,
 ticket digital).
@@ -29,6 +29,7 @@ ticket digital).
 - [Fluxos e máquinas de estado](docs/architecture/flows.md)
 - [ADRs](docs/adr/README.md)
 - [Glossário de domínio](docs/domain/glossary.md)
+- [Equipamentos e custos (kit de câmera)](docs/hardware/equipamentos-e-custos.md)
 
 ## Desenvolvimento com Claude Code
 

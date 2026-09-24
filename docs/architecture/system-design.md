@@ -64,7 +64,9 @@ flowchart LR
   web --> api
   cam[[Câmera IP / ANPR\nna entrada/saída]] -->|RTSP ou evento HTTP| edge[Agente de borda\nPython · no estacionamento]
   edge -->|HTTPS · API key + HMAC\ntempo real ou lote fim do dia| api
-  owner([Dono]) -->|e-mail com relatório diário| email
+  owner([Dono]) -->|relatório diário por e-mail| email
+  api --> wa[(WhatsApp Business\nCloud API · Meta)]
+  wa -->|relatório diário + alertas| owner
   api[Neulander API\nNestJS] --> psp[(Provedor de pagamento\nMercado Pago Pix · Stripe cartão)]
   psp -->|webhooks| api
   api --> email[(E-mail\nSES / Mailpit)]
@@ -129,8 +131,8 @@ Monólito modular; cada módulo é um *bounded context* com fronteira forçada p
 | `subscriptions` | Mensalistas: planos, contratos, cobrança recorrente, placas autorizadas | `SubscriptionPlan`, `Subscription` | `SubscriptionActivated`, `SubscriptionPastDue` |
 | `lpr` | Câmeras/agentes de borda (cadastro, chave, heartbeat, config), ingestão de leituras, pareamento entrada↔saída, fila de revisão | `Device`, `PlateRead` | `PlateReadReceived`, `PlateReadMatched`, `ReviewRequired`, `DeviceOffline` |
 | `occupancy` | Contadores em tempo real, gateway WebSocket, cache de disponibilidade | (read model) | — consome eventos |
-| `notifications` | E-mail, push, templates | `Notification` | — consome eventos |
-| `reporting` | **Relatório diário por estacionamento** (fechamento, PDF/CSV, envio por e-mail), read models de faturamento/ocupação, exports | `DailyReport` + projeções | `DailyReportReady` |
+| `notifications` | E-mail (SES), WhatsApp (Cloud API da Meta, ADR-0013), push, templates, opt-in e status de entrega | `Notification`, `ReportRecipient` | — consome eventos |
+| `reporting` | **Relatório diário por estacionamento** (fechamento, PDF/CSV, envio por e-mail e WhatsApp), read models de faturamento/ocupação, exports | `DailyReport` + projeções | `DailyReportReady` |
 | `shared` (kernel) | `DomainError`, `Clock`, `Money/Cents`, outbox, idempotência, auditoria | — | — |
 
 ### Estrutura interna de um módulo
@@ -208,8 +210,16 @@ flowchart LR
   db --> up[Uploader\nrealtime · end_of_day]
 ```
 
-- **Direção:** faixa só de entrada / só de saída é configuração da câmera. Com **uma única câmera para entrada e saída**,
-  a direção vem do rastreamento (sentido do movimento cruzando uma linha virtual na imagem).
+- **Direção — configuração padrão é UMA câmera para entrada e saída** (`lane = bidirectional`). A câmera fica de frente
+  para quem entra: carros entrando mostram a placa dianteira; saindo, a traseira. A direção é decidida em camadas:
+  1. evento da câmera ANPR, se o modelo informar sentido (aproximando/afastando);
+  2. rastreamento do agente no stream RTSP da própria câmera (sentido do movimento cruzando uma linha virtual e variação do
+     tamanho da placa: crescendo = aproximando = entrada) — funciona tanto na fonte `rtsp` quanto em paralelo à `anpr_push`;
+  3. se ainda for inconclusiva → `direction = unknown` e o servidor decide pelo estado (tem sessão aberta → saída; senão → entrada).
+  Faixas separadas (`lane = entry`/`exit`) continuam suportadas para estacionamentos com duas câmeras.
+- **Motos** só têm placa traseira: com câmera única voltada para quem entra, a entrada da moto não é lida. A saída sem
+  entrada de `vehicle_type = motorcycle` vira exceção **esperada** no relatório (não vai para a fila de revisão) e o operador
+  pode lançar a entrada da moto no painel. Solução definitiva: segunda câmera (ver `docs/hardware/equipamentos-e-custos.md`).
 - **Horário:** vale o `captured_at` do agente (relógio sincronizado por NTP), nunca o horário em que o servidor recebeu.
   O heartbeat reporta o desvio do relógio; desvio > 30 s gera alerta.
 - **Modos de envio (por câmera):** `realtime` (envia em segundos, painel ao vivo) ou `end_of_day` (acumula e envia em lote
@@ -228,7 +238,8 @@ para a **fila de revisão** no painel. Detalhes em `flows.md` §7–8.
 | `record_only` | Câmera **registra** entrada/saída e calcula o valor devido; cobrança continua com o operador. Ideal para o dono auditar o movimento real vs. o que foi cobrado |
 | `enforced` | Saída só é considerada regular se a sessão estiver paga; saída sem pagamento vira exceção no relatório (e, com cancela na Fase 12, bloqueia a saída) |
 
-**Hardware de referência:** mini PC x86 (Intel N100, 8 GB) roda 1–2 câmeras RTSP a 5 fps com modelos ONNX em CPU;
+**Hardware e custos:** ver `docs/hardware/equipamentos-e-custos.md` (kit por estacionamento com 3 referências de preço por item).
+**Hardware de referência:** mini PC x86 (Intel N100, 16 GB) roda 1–2 câmeras RTSP a 5 fps com modelos ONNX em CPU;
 para mais câmeras, Jetson Orin Nano. Câmera com lente adequada à faixa, iluminação IR para a noite, altura/ângulo conforme guia em `apps/edge-agent/README.md`.
 
 ### 7.8 Relatório diário para o dono
@@ -240,7 +251,12 @@ Job `daily-report` por estacionamento no **horário de corte** (`business_day_cu
    (placa, entrada, saída, permanência, valor calculado, valor efetivamente pago), **veículos ainda dentro**, faturamento
    calculado vs. recebido, e **exceções** (saída sem entrada, leitura corrigida manualmente, saída sem pagamento em `enforced`,
    câmera offline).
-3. Gera PDF + CSV no S3, grava `daily_reports` e envia e-mail com resumo no corpo + links assinados para `report_recipients` (dono e gestores).
+3. Gera PDF + CSV no S3, grava `daily_reports` e envia para cada destinatário ativo em `report_recipients` (dono e gestores):
+   - **E-mail:** resumo no corpo + PDF anexo + link assinado para o CSV.
+   - **WhatsApp:** mensagem de template aprovado pela Meta (categoria *utility*) com o **PDF como documento** e o resumo
+     no texto (entradas, saídas, no pátio, faturamento, nº de exceções). Exige opt-in registrado do destinatário.
+   - Falha em um canal não bloqueia o outro; status de entrega (enviado/entregue/lido/falhou) vem por webhook e aparece no painel.
+   - Mesmo canal serve para **alertas** opcionais: câmera offline > 15 min, fila de revisão acumulada, relatório com aviso.
 4. Leitura atrasada que muda um dia já fechado → relatório marcado como "revisado" e reenviado (versão 2).
 
 Disponível também no painel (página "Relatórios diários") e, durante o dia, em tempo real no feed de leituras e no dashboard.
@@ -252,6 +268,8 @@ Disponível também no painel (página "Relatórios diários") e, durante o dia,
 - **Dispositivos (agente de borda):** API key por dispositivo (hash no banco, exibida uma vez, rotacionável) + assinatura HMAC
   do corpo com timestamp (janela de 5 min contra replay); escopo restrito a um estacionamento; só endpoints `/v1/devices/*`.
   O endereço RTSP e a senha da câmera ficam só no agente, nunca no servidor.
+- **WhatsApp:** só a API oficial (Cloud API da Meta) — bibliotecas não oficiais violam os termos e o número pode ser banido.
+  Token de sistema no Secrets Manager; webhook validado por `X-Hub-Signature-256`; telefone do destinatário é dado pessoal (mascarado em logs).
 - **Webhooks:** validação de assinatura HMAC, allowlist de IP quando o PSP oferecer, tabela `webhook_events` com unique no ID externo.
 - **Rate limiting:** Redis (`@nestjs/throttler`) por IP e por usuário; mais restrito em login e criação de pagamento.
 - **LGPD — câmeras:** placa e imagem de veículo são dados pessoais. Aviso visível de monitoramento na entrada; só recortes
