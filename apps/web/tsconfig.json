@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Vite app, not a published library: start from the shared "library" preset
+  // (ESNext + Bundler resolution — see packages/config/tsconfig.library.json)
+  // and override for a browser + JSX target, the same way apps/api/tsconfig.json
+  // overrides the shared "node" preset for NestJS's CommonJS runtime.
+  "extends": "@neulander/config/tsconfig/library.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    // The base preset's "rootDir"/"outDir" ("src"/"dist") are relative paths that
+    // resolve against *that config file's own directory* (packages/config), not
+    // this one, when inherited via "extends" — same gotcha apps/api/tsconfig.json
+    // documents. "." covers both src/**/*.{ts,tsx} and the root-level *.config.ts
+    // files below without a bogus cross-package rootDir.
+    "rootDir": ".",
+    // This tsconfig is used for --noEmit typecheck/eslint only — Vite (esbuild)
+    // does the actual transpilation for dev/build, so no declaration output needed.
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}
