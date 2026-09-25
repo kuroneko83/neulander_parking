@@ -18,3 +18,4 @@ Formato: contexto → decisão → consequências → alternativas. ADR aceito �
 | [0012](0012-lpr-ingestion-realtime-and-batch.md) | Ingestão LPR em tempo real e em lote, idempotente |
 | [0013](0013-whatsapp-cloud-api.md) | Relatório e alertas via WhatsApp Cloud API oficial |
 | [0014](0014-edge-agent-windows-service.md) | Agente de borda como serviço nativo no Windows (PC do guichê) |
+| [0015](0015-localstack-s3-dev.md) | LocalStack como substituto local de S3 (MinIO descontinuado) |

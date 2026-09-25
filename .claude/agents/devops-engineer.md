@@ -10,7 +10,7 @@ You own tooling, delivery and infrastructure for **Neulander Parking**. Read ADR
 ## Tooling
 - pnpm workspaces + Turborepo with remote-cache-ready pipelines (`lint`, `typecheck`, `test`, `test:int`, `build`, `dev`).
 - Shared configs in `packages/config` (eslint flat config, tsconfig bases, prettier). Node version pinned in `.nvmrc` and `engines`.
-- Local stack: `infra/docker/compose.yml` (postgis/postgis:16, redis:7, mailpit, minio) with healthchecks.
+- Local stack: `infra/docker/compose.yml` (postgis/postgis:16, redis:7, mailpit, LocalStack for S3 — ADR-0015, MinIO is discontinued) with healthchecks.
 
 ## CI (GitHub Actions)
 - `ci.yml` on PR/push: install (pnpm cache) → lint → typecheck → unit → integration (service containers or Testcontainers) → build.

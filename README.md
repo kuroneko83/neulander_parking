@@ -43,4 +43,25 @@ Para começar: abra o Claude Code na raiz e rode `/next-task`.
 
 ## Rodando localmente
 
-_Disponível ao fim da Fase 0._
+A infra local (Postgres+PostGIS, Redis, Mailpit e LocalStack) já está disponível via Docker Compose:
+
+```bash
+cp .env.example .env                                # só na primeira vez
+docker compose -f infra/docker/compose.yml up -d
+```
+
+Isso sobe Postgres 16+PostGIS na porta `5433` (a `5432` local pode já estar em uso por outro projeto),
+Redis 7 na `6379`, e cria automaticamente os buckets S3 (**LocalStack**, substituto local da AWS S3 —
+MinIO foi descontinuado, ver ADR-0015) usados para imagens de placa e relatórios. Para ver os e-mails
+capturados em dev (relatório diário), abra a UI do **Mailpit** em <http://localhost:8025>; para navegar
+nos buckets do **LocalStack** (S3 local, sem console web nesta edição), use a AWS CLI apontada para o
+endpoint local: `aws --endpoint-url=http://localhost:4566 s3 ls s3://neulander-plate-images-dev`
+(credenciais dummy `test`/`test`, já em `.env.example`).
+
+> ⚠️ **Passo manual único, LocalStack:** desde 23/03/2026 a LocalStack exige uma conta gratuita mesmo
+> para uso "community". Crie uma conta no plano **Hobby** (uso não comercial) em
+> <https://app.localstack.cloud>, gere um token e coloque em `LOCALSTACK_AUTH_TOKEN` no seu `.env`
+> (nunca commitado) antes de subir o compose — sem isso o container `localstack` fecha com
+> "License activation failed". Ver ADR-0015.
+
+Os comandos de `apps/api` (`pnpm dev`, migrations etc.) chegam nas tarefas 0.3/0.4 da Fase 0.

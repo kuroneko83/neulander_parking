@@ -1,0 +1,145 @@
+# Infra local — Neulander Parking (ULTRAPLAN 0.2)
+#
+# Uso:
+#   cp .env.example .env   # a partir da raiz do repo (só na primeira vez)
+#   docker compose -f infra/docker/compose.yml up -d
+#
+# Fonte única de configuração: o `.env` da raiz do projeto (o mesmo que apps/api vai
+# usar quando existir — tarefa 0.3). Este compose NÃO tem um infra/docker/.env próprio
+# para não duplicar valores em dois lugares: cada serviço lê `env_file: ../../.env` e,
+# como rede de segurança para quem ainda não copiou o .env.example, cada variável tem
+# um default inline (`${VAR:-default}`) que replica exatamente o que está em
+# .env.example — não é uma segunda fonte de verdade, é só o mesmo valor default escrito
+# nos dois lugares para o `up` nunca falhar por variável ausente.
+#
+# Rode sempre a partir da RAIZ do repo (`docker compose -f infra/docker/compose.yml
+# up -d`), não de dentro de infra/docker/: o `env_file` acima é relativo a este
+# arquivo e funciona de qualquer lugar, mas os defaults inline (`${VAR:-default}`)
+# usados nos blocos `environment:` abaixo são resolvidos pelo Compose a partir do
+# `.env` do diretório de trabalho atual — rodando de outro lugar, esses defaults
+# poderiam silenciosamente prevalecer sobre um `.env` customizado.
+
+name: neulander-parking
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres 16 + PostGIS (ADR-0003). Extensões (postgis, btree_gist, pg_trgm,
+  # citext) são criadas na migration inicial (tarefa 0.4) — aqui só a imagem certa.
+  # Tag "16-3.4" (não "16" solto) para fixar também a versão do PostGIS e evitar
+  # que um rebuild silencioso puxe uma versão de extensão diferente da testada.
+  # Porta do HOST em 5433 (não 5432): esta máquina já roda outro Postgres na 5432
+  # (container "evolution-postgres", de outro projeto) — 5432 continua livre
+  # *dentro* da rede Docker deste compose, só o mapeamento externo muda.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: neulander-postgres
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-neulander}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neulander}
+      POSTGRES_DB: ${POSTGRES_DB:-neulander_parking}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neulander} -d ${POSTGRES_DB:-neulander_parking}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - neulander-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — cache, filas BullMQ e adapter de WS (ADR-0006/0007), nunca fonte
+  # de verdade de dados de negócio. Sem volume nomeado, de propósito: se o
+  # container cair/for recriado em dev, perder cache/filas/sessões de socket é
+  # aceitável e simplifica o ambiente local (nada de dado "preso" em volume
+  # órfão). Em produção o equivalente é ElastiCache gerenciado (system-design §5).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: neulander-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - neulander-net
+
+  # ---------------------------------------------------------------------------
+  # Mailpit — captura de e-mail em dev (substitui SES local, ADR-0013).
+  # Porta 1025 = SMTP (bate com SMTP_DEV_URL), 8025 = UI web para ler os e-mails.
+  # ---------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    container_name: neulander-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - neulander-net
+
+  # ---------------------------------------------------------------------------
+  # LocalStack — substituto local da AWS S3 para imagens de placa (recortes,
+  # LGPD/regra 10 do CLAUDE.md) e relatórios PDF/CSV. MinIO foi descontinuado
+  # (imagens/binários públicos removidos, repositório arquivado em 04/2026) —
+  # ver ADR-0015. Produção continua em S3 real da AWS (Fase 11, ADR-0009); isto
+  # é só dev/CI. Porta 4566 = "edge port" (todas as APIs AWS emuladas nela,
+  # bate com S3_ENDPOINT). Sem console web nesta edição — inspecionar buckets
+  # via AWS CLI apontada para o endpoint local (ver README.md).
+  # ---------------------------------------------------------------------------
+  localstack:
+    image: localstack/localstack:2026.8.4
+    container_name: neulander-localstack
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      SERVICES: s3
+      PERSISTENCE: 1
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      BUCKET_PLATE_IMAGES: ${S3_BUCKET_PLATE_IMAGES:-neulander-plate-images-dev}
+      BUCKET_REPORTS: ${S3_BUCKET_REPORTS:-neulander-reports-dev}
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      # Init hook: cria os buckets automaticamente quando o S3 emulado fica pronto
+      # (substitui o antigo container efêmero `minio-init` baseado em `mc`).
+      - ./localstack-init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - neulander-net
+
+volumes:
+  postgres_data:
+    name: neulander_postgres_data
+  localstack_data:
+    name: neulander_localstack_data
+
+networks:
+  neulander-net:
+    name: neulander-parking-net
+    driver: bridge
