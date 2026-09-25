@@ -19,3 +19,4 @@ Formato: contexto → decisão → consequências → alternativas. ADR aceito �
 | [0013](0013-whatsapp-cloud-api.md) | Relatório e alertas via WhatsApp Cloud API oficial |
 | [0014](0014-edge-agent-windows-service.md) | Agente de borda como serviço nativo no Windows (PC do guichê) |
 | [0015](0015-localstack-s3-dev.md) | LocalStack como substituto local de S3 (MinIO descontinuado) |
+| [0016](0016-outbox-relay-sem-ordenacao-por-agregado.md) | Outbox relay sem ordenação por agregado (adiada até haver consumidor real) |

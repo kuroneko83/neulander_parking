@@ -1,0 +1,29 @@
+/**
+ * Public API of the `shared` kernel module (ULTRAPLAN 0.5, CLAUDE.md rule 1: "Cada
+ * módulo da API expõe apenas seu `index.ts`"). Every other module imports from
+ * `modules/shared` — never from `modules/shared/domain/...` or `modules/shared/infra/...`
+ * directly.
+ */
+
+// --- domain (pure) ---
+export { type Clock, FakeClock } from "./domain/clock";
+export { DomainError } from "./domain/domain-error";
+export type { DomainEvent } from "./domain/domain-event";
+export { newId } from "./domain/id";
+export { addCents, type Cents, isCents, subtractCents, toCents, ZERO_CENTS } from "./domain/money";
+export { maskPlate, normalizePlate } from "./domain/plate";
+
+// --- infra (Nest/Drizzle wiring) ---
+// Note: `infra/schema.ts`'s tables (`outboxEvents`, `idempotencyKeys`) are deliberately
+// NOT re-exported here — only `OutboxService`/`IdempotencyInterceptor` (both internal to
+// this module) ever query them, per CLAUDE.md rule 2 ("código de um módulo não faz JOIN
+// em tabela de outro"). `apps/api/src/database/schema.ts` still re-exports them directly
+// from `infra/schema.ts` (bypassing this `index.ts`), but that barrel exists purely for
+// `drizzle-kit` tooling, not for application code to import from.
+export { IdempotencyInterceptor } from "./infra/idempotency.interceptor";
+export { OutboxService } from "./infra/outbox.service";
+export { DOMAIN_EVENTS_QUEUE, OutboxRelayProcessor } from "./infra/outbox-relay.processor";
+export { CLOCK, SystemClock } from "./infra/system-clock";
+
+// --- module ---
+export { SharedModule } from "./shared.module";

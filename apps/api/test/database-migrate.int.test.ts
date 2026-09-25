@@ -12,11 +12,15 @@
  *    btree_gist, pg_trgm and citext (queries `pg_extension`).
  *  - running the exact same migration set a second time is idempotent: no error, and
  *    Drizzle's own `drizzle.__drizzle_migrations` bookkeeping table still has exactly
- *    one row (it does not re-apply/duplicate an already-applied migration).
+ *    one row per `.sql` file under `drizzle/` (it does not re-apply/duplicate an
+ *    already-applied migration). Counted dynamically from the folder, not hardcoded —
+ *    ULTRAPLAN 0.5 added a second migration file (`modules/shared/infra/schema.ts`), and
+ *    every module from Phase 1 onward will add more.
  *
  * Safe to run repeatedly against the same long-lived dev database (no drop/recreate
  * needed between runs) — that repeatability *is* the idempotency guarantee under test.
  */
+import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -26,6 +30,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const MIGRATIONS_FOLDER = resolve(__dirname, "../drizzle");
 const EXPECTED_EXTENSIONS = ["btree_gist", "citext", "pg_trgm", "postgis"];
+const EXPECTED_MIGRATION_COUNT = readdirSync(MIGRATIONS_FOLDER).filter((file) =>
+  file.endsWith(".sql"),
+).length;
 
 describe("db:migrate — 0000_enable_postgres_extensions against real Postgres", () => {
   let pool: Pool;
@@ -67,7 +74,7 @@ describe("db:migrate — 0000_enable_postgres_extensions against real Postgres",
       'SELECT count(*)::text AS count FROM drizzle."__drizzle_migrations"',
     );
 
-    expect(rows[0]?.count).toBe("1");
+    expect(rows[0]?.count).toBe(String(EXPECTED_MIGRATION_COUNT));
 
     // Extensions are still exactly the 4 expected ones — a duplicate re-run would not
     // add duplicates (CREATE EXTENSION IF NOT EXISTS), but this pins the invariant down.

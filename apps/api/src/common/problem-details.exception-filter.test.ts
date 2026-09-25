@@ -7,6 +7,10 @@ import {
 import type { PinoLogger } from "nestjs-pino";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Same reasoning as the filter itself: import the pure domain file directly, not the
+// `modules/shared` barrel (which would drag in AppConfigModule/DatabaseModule and their
+// `process.env` validation into this dependency-free unit test).
+import { DomainError } from "../modules/shared/domain/domain-error";
 import { ProblemDetailsExceptionFilter } from "./problem-details.exception-filter";
 
 interface MockResponse {
@@ -135,6 +139,31 @@ describe("ProblemDetailsExceptionFilter", () => {
         redis: { status: "down", message: "connect ECONNREFUSED" },
       },
     });
+  });
+
+  it("maps a DomainError to its own code/httpStatus, bypassing the generic status table", () => {
+    const { host, res } = createHost();
+
+    filter.catch(new DomainError("SESSION_ALREADY_OPEN", "Sessão já está aberta.", 409), host);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    const body = sentBody(res);
+
+    expect(body).toMatchObject({
+      type: "about:blank",
+      status: 409,
+      code: "SESSION_ALREADY_OPEN",
+      detail: "Sessão já está aberta.",
+    });
+  });
+
+  it("defaults a DomainError's httpStatus to 422 when none is given", () => {
+    const { host, res } = createHost();
+
+    filter.catch(new DomainError("INVALID_PLATE", "Placa inválida."), host);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(sentBody(res)).toMatchObject({ status: 422, code: "INVALID_PLATE" });
   });
 
   it("sets the Content-Type header to application/problem+json", () => {

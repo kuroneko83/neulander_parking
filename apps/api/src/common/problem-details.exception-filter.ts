@@ -3,6 +3,17 @@ import { Catch, HttpException, HttpStatus } from "@nestjs/common";
 import type { Response } from "express";
 import { PinoLogger } from "nestjs-pino";
 
+// Deliberately imported from the pure domain file, not `modules/shared`'s public
+// `index.ts` barrel: that barrel also re-exports `SharedModule` (Nest/Drizzle/BullMQ
+// wiring), so importing anything from it — even just this plain `Error` subclass — would
+// eagerly evaluate `AppConfigModule`/`DatabaseModule` too (they validate `process.env`/
+// build a pool at import time, see main.ts's comment on `ConfigModule.forRoot()`). This
+// filter is instantiated by `AppModule` itself and exercised by pure unit tests
+// (`problem-details.exception-filter.test.ts`, no `.env` loaded) — pulling in that whole
+// graph here broke exactly those tests. `domain/domain-error.ts` is pure TS by design
+// (no Nest/Drizzle import) specifically so cross-cutting code like this can depend on it
+// without depending on the rest of the module.
+import { DomainError } from "../modules/shared/domain/domain-error";
 import type { ProblemDetails } from "./problem-details";
 
 /** RFC 9457 §4.2: "about:blank" means "no further information beyond the HTTP status". */
@@ -65,6 +76,10 @@ export class ProblemDetailsExceptionFilter implements ExceptionFilter {
   }
 
   private toProblemDetails(exception: unknown): ProblemDetails {
+    if (exception instanceof DomainError) {
+      return this.fromDomainError(exception);
+    }
+
     if (exception instanceof HttpException) {
       return this.fromHttpException(exception);
     }
@@ -75,6 +90,24 @@ export class ProblemDetailsExceptionFilter implements ExceptionFilter {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       detail: "Ocorreu um erro inesperado.",
       code: "INTERNAL_ERROR",
+    };
+  }
+
+  /**
+   * `DomainError` (ULTRAPLAN 0.5, `modules/shared`) carries its own stable `code` and
+   * `httpStatus` — unlike generic Nest exceptions, there's no status-to-code table lookup
+   * here, the error itself is the source of truth. `message` is used verbatim as `detail`:
+   * every `DomainError` subclass is expected to build a message that's already safe to
+   * show a client (CLAUDE.md rule 10 — e.g. `normalizePlate()` masks the plate in its own
+   * error message before this filter ever sees it).
+   */
+  private fromDomainError(exception: DomainError): ProblemDetails {
+    return {
+      type: PROBLEM_TYPE,
+      title: "Erro de negócio",
+      status: exception.httpStatus,
+      detail: exception.message,
+      code: exception.code,
     };
   }
 
