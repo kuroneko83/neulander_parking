@@ -7,7 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.5 — Kernel `shared`: Clock, Cents, placas, Idempotency-Key, outbox+BullMQ (`a5c176b`)
+- **Última tarefa concluída:** 0.6 — `packages/contracts`/`packages/pricing`; `Cents`/`DomainEvent` migrados pra contracts (`1f8245f`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas.
@@ -46,7 +46,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [x] **0.4** Drizzle configurado (migrations em `apps/api/drizzle/`), extensões `postgis`, `btree_gist`, `pg_trgm`, `citext` na migration inicial; scripts `db:generate`/`db:migrate`/`db:seed` — `database-engineer` (`c30c399`)
 - [x] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer` (`a5c176b`)
   - Aceite: testes unitários de placa (Mercosul/antiga/inválida) e integração do outbox (evento gravado na tx e publicado).
-- [ ] **0.6** `packages/contracts` (Zod) e `packages/pricing` (vazio com teste de fumaça) com build `tsup` — `backend-engineer`
+- [x] **0.6** `packages/contracts` (Zod) e `packages/pricing` (vazio com teste de fumaça) com build `tsup` — `backend-engineer` (`1f8245f`)
 - [ ] **0.7** `apps/web`: Vite + React 18 + MUI v5 (tema claro/escuro, pt-BR), React Router, TanStack Query, layout com AppBar/Drawer, página 404 — `web-engineer`
 - [ ] **0.8** `eslint-plugin-boundaries` (ou dependency-cruiser) impedindo import entre internals de módulos — `architect`
 - [ ] **0.9** GitHub Actions: `ci.yml` (install com cache, lint, typecheck, unit, integration com services postgres/redis, build; job Python para `apps/edge-agent` com ruff + mypy + pytest quando existir); PR template; Dependabot/Renovate — `devops-engineer`
