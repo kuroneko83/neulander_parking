@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Only src/**/*.ts (no test/**) is actually emitted here, so this can be "src"
+    // again (tsconfig.json sets "." only to also typecheck test/ without emitting).
+    "rootDir": "src"
+  },
+  "exclude": ["node_modules", "test", "dist", "**/*.test.ts"]
+}

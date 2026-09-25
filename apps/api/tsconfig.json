@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@neulander/config/tsconfig/node.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    // "." (not "src"): this tsconfig is used for --noEmit typecheck/eslint and includes
+    // both src/ and test/ (integration tests) — tsconfig.build.json (nest build) excludes
+    // test/ and inherits everything else, so its actual emit output is unaffected.
+    "rootDir": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    // Override @neulander/config's NodeNext (ESM) module setting: NestJS 10's own
+    // ecosystem (nest-cli, decorators + reflect-metadata) still assumes CommonJS —
+    // ESM under NodeNext would require an explicit ".js" extension on every relative
+    // import, which fights nest-cli/ts-node. `verbatimModuleSyntax` requires the
+    // compiler to preserve `import`/`export` syntax as written, which is incompatible
+    // with transforming it down to `require`/`exports` for a "commonjs" module target —
+    // so it must be off here (eslint's `consistent-type-imports` rule still enforces
+    // `import type` for type-only imports at lint time, just not via tsc).
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}
