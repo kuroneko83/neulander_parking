@@ -7,10 +7,10 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.2 — Docker Compose local: Postgres+PostGIS, Redis, Mailpit, LocalStack (`b232d94`)
+- **Última tarefa concluída:** 0.3 — `apps/api` NestJS: bootstrap, config Zod, health checks, Swagger (`42ef216`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
-  desde 23/03/2026; Postgres do compose exposto na porta `5433` (não `5432`) por já haver outro Postgres nesta
-  máquina de dev.
+  desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
+  já haver outros projetos nesta máquina de dev ocupando essas portas.
 - **Escopo do protótipo (2026-09-25):** alvo até **M3 (Fases 0–7)** — automação do controle de entrada/saída e
   operação do dia a dia para o **dono do estacionamento**, sem app para clientes/motoristas por enquanto. Fases 8
   e 9 ficam só como estrutura/contratos (ver notas nos cabeçalhos de cada fase abaixo). Ver `CLAUDE.md`.
@@ -42,7 +42,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [x] **0.1** Monorepo pnpm + Turborepo, `packages/config` (tsconfig base strict, eslint flat config, prettier), `.nvmrc` (Node 22), `.editorconfig`, `.env.example` — `devops-engineer` (`4af88e9`)
   - Aceite: `pnpm lint`, `pnpm typecheck`, `pnpm test` rodam na raiz (mesmo sem código).
 - [x] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, LocalStack — S3 (imagens LPR/relatórios; substitui MinIO, descontinuado — ADR-0015); healthchecks; volume nomeado — `devops-engineer` (`b232d94`)
-- [ ] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer`
+- [x] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer` (`42ef216`)
 - [ ] **0.4** Drizzle configurado (migrations em `apps/api/drizzle/`), extensões `postgis`, `btree_gist`, `pg_trgm`, `citext` na migration inicial; scripts `db:generate`/`db:migrate`/`db:seed` — `database-engineer`
 - [ ] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer`
   - Aceite: testes unitários de placa (Mercosul/antiga/inválida) e integração do outbox (evento gravado na tx e publicado).
