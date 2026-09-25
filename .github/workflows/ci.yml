@@ -1,0 +1,141 @@
+name: CI
+
+# ULTRAPLAN 0.9 — devops-engineer.
+#
+# Gatilhos: push em `main` (histórico "verde" da branch principal) e todo pull_request
+# (não importa a branch de origem/destino) — cobre o fluxo normal de 1 desenvolvedor
+# abrindo PR a partir de uma branch de feature.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Permite disparar manualmente (`gh workflow run ci.yml --ref <branch>`) — útil para
+  # validar o workflow numa branch de feature antes dela virar PR contra main.
+  workflow_dispatch:
+
+# Cancela execuções antigas do mesmo PR/branch quando um novo push chega, para não
+# gastar minutos de runner com um resultado que já ficou obsoleto.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Menor privilégio: este job só lê o repositório (checkout, install, testes) — nunca
+# comenta PR, publica release nem dá push. Sem isso o GITHUB_TOKEN herdaria as
+# permissões default do repo/organização, que podem ser mais amplas que o necessário.
+permissions:
+  contents: read
+
+env:
+  # process.env.CI é usado por algumas libs (ex.: turbo, alguns loggers) para ajustar
+  # comportamento (menos cor no output, etc.) — GitHub Actions já define isso, mas
+  # deixamos explícito por clareza.
+  CI: "true"
+
+jobs:
+  ci:
+    name: install, lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Postgres/Redis ficam disponíveis para o job inteiro (services do GitHub Actions não
+    # têm escopo por step), mas só os steps de integração (db:migrate + test:int) os usam
+    # de fato — lint/typecheck/test unitário/build não dependem de nenhum serviço externo
+    # (ver apps/api/vitest.config.mts: "Unit tests only — no external dependencies").
+    services:
+      postgres:
+        # Mesma imagem do infra/docker/compose.yml (paridade dev/CI) — Postgres 16 +
+        # PostGIS 3.4 fixados via tag, não "16" solto.
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: neulander
+          POSTGRES_PASSWORD: neulander
+          POSTGRES_DB: neulander_parking
+        ports:
+          # Porta padrão do Postgres: um runner do GitHub Actions é uma máquina limpa, sem
+          # o conflito de porta 5432 que existe nesta máquina de dev (ver .env.example) —
+          # não reaproveitar a porta 5433 usada localmente.
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U neulander -d neulander_parking"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Precisa rodar ANTES do actions/setup-node abaixo: o cache "pnpm" do setup-node
+      # descobre o diretório do pnpm store chamando `pnpm store path`, então o pnpm já
+      # precisa estar instalado no PATH nesse ponto. Sem `version:` de propósito — o
+      # action lê o campo "packageManager" (pnpm@9.15.0) do package.json raiz sozinho.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      # Cache dos resultados do Turborepo (task-level caching) — separado do cache do
+      # pnpm store acima (aquele é de dependências; este é de outputs de lint/typecheck/
+      # test/build já rodados para o mesmo conteúdo de arquivo). Não bloqueante: se a
+      # chave não bater, o Turbo simplesmente reexecuta tudo (`cache miss`).
+      - name: Cache Turborepo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .turbo
+            apps/*/.turbo
+            packages/*/.turbo
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-${{ github.job }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (todo o monorepo)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      # `apps/api/test/setup-int.ts` só carrega variáveis de ambiente — não roda migration
+      # nenhuma. As tabelas de outbox/idempotency (e todo o resto do schema) só existem no
+      # Postgres do CI depois deste passo, por isso ele roda antes do `pnpm test:int`.
+      - name: Run database migrations (integration DB)
+        run: pnpm --filter api db:migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://neulander:neulander@localhost:5432/neulander_parking
+
+      - name: Integration tests
+        run: pnpm test:int
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://neulander:neulander@localhost:5432/neulander_parking
+          REDIS_URL: redis://localhost:6379
+
+      - name: Build
+        run: pnpm build
+
+# Job Python (apps/edge-agent): uv sync, ruff, mypy, pytest — chega junto com a tarefa
+# 5.7 do ULTRAPLAN, quando `apps/edge-agent` nascer. Não faz sentido um job (nem
+# condicional) para uma pasta que ainda não existe no repositório.

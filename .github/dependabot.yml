@@ -1,0 +1,50 @@
+# ULTRAPLAN 0.9 — devops-engineer.
+#
+# Dependabot em vez de Renovate: nativo do GitHub (nenhum app terceiro para instalar/
+# autorizar), configuração é um único YAML já suportado sem setup extra, e cobre os dois
+# ecossistemas que este repositório precisa hoje (npm/pnpm e as próprias GitHub Actions).
+# Para um projeto de portfólio de 1 desenvolvedor, o poder de agrupamento/customização
+# maior do Renovate não compensa a dependência de infraestrutura adicional.
+#
+# Ecossistemas deliberadamente de fora por enquanto:
+# - pip: apps/edge-agent ainda não existe (nasce na Fase 5, tarefa 5.7).
+# - docker: nenhum Dockerfile no repositório ainda (chega na tarefa de containerização
+#   do apps/api, também mais adiante no ULTRAPLAN).
+version: 2
+updates:
+  # Dependências do monorepo (raiz + todos os workspaces apps/*, packages/* — o
+  # ecossistema "npm" do Dependabot entende pnpm workspaces a partir do pnpm-lock.yaml
+  # na raiz e resolve as versões de cada package.json do monorepo).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    groups:
+      # Agrupa updates de patch/minor num PR só, para não inundar o repo — updates
+      # major continuam vindo em PRs separados (podem quebrar contrato/API).
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Actions de terceiros usadas em .github/workflows/ci.yml — todas pinadas por SHA
+  # completo (ver ci.yml); o Dependabot sabe abrir PR trocando o SHA antigo pelo novo
+  # (mantendo o comentário `# vX.Y.Z` sincronizado) quando uma nova versão sai.
+  # Sem `groups` aqui de propósito (diferente do "npm" acima): update de Action pinada
+  # por SHA é justamente o tipo de mudança que vale revisar uma a uma, não em lote.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Sao_Paulo"
+    labels:
+      - "dependencies"
+      - "ci"
