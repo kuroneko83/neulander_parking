@@ -7,8 +7,10 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.1 — Monorepo pnpm + Turborepo, `packages/config`, `.env.example` (`4af88e9`)
-- **Bloqueios / notas:** —
+- **Última tarefa concluída:** 0.2 — Docker Compose local: Postgres+PostGIS, Redis, Mailpit, LocalStack (`b232d94`)
+- **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
+  desde 23/03/2026; Postgres do compose exposto na porta `5433` (não `5432`) por já haver outro Postgres nesta
+  máquina de dev.
 
 ## Visão geral das fases
 
@@ -36,7 +38,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 
 - [x] **0.1** Monorepo pnpm + Turborepo, `packages/config` (tsconfig base strict, eslint flat config, prettier), `.nvmrc` (Node 22), `.editorconfig`, `.env.example` — `devops-engineer` (`4af88e9`)
   - Aceite: `pnpm lint`, `pnpm typecheck`, `pnpm test` rodam na raiz (mesmo sem código).
-- [ ] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, `minio` (imagens LPR/relatórios); healthchecks; volume nomeado — `devops-engineer`
+- [x] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, LocalStack — S3 (imagens LPR/relatórios; substitui MinIO, descontinuado — ADR-0015); healthchecks; volume nomeado — `devops-engineer` (`b232d94`)
 - [ ] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer`
 - [ ] **0.4** Drizzle configurado (migrations em `apps/api/drizzle/`), extensões `postgis`, `btree_gist`, `pg_trgm`, `citext` na migration inicial; scripts `db:generate`/`db:migrate`/`db:seed` — `database-engineer`
 - [ ] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer`
@@ -97,7 +99,7 @@ Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md` — **alvo: plan
 - [ ] **5.1** Contracts: `PlateReadInput` (lote), `DeviceHeartbeat`, `DeviceConfig`, `DailyReportSummary`; export JSON Schema dos contratos para o agente Python (`pnpm contracts:jsonschema`) — `architect`
 - [ ] **5.2** Schema `devices`, `plate_reads`, `daily_reports`; colunas novas em `parking_sessions` (`entry_read_id`, `exit_read_id`, `settlement_status`) e `parking_lots` (`lpr_mode`, `business_day_cutoff`, `image_retention_days`); `report_recipients`, `notification_deliveries`; `plate_reads.vehicle_type` e `direction_source` — `database-engineer`
 - [ ] **5.3** Módulo `lpr`: cadastro de câmera (gera API key exibida uma única vez), autenticação de dispositivo (API key + assinatura HMAC com timestamp), `heartbeat` que devolve config — `backend-engineer`
-- [ ] **5.4** Ingestão `POST /v1/devices/reads` em lote (até 500), idempotente pelo `id` gerado na borda, + URLs pré-assinadas para as imagens (S3/minio) — `backend-engineer`
+- [ ] **5.4** Ingestão `POST /v1/devices/reads` em lote (até 500), idempotente pelo `id` gerado na borda, + URLs pré-assinadas para as imagens (S3; LocalStack em dev — ADR-0015) — `backend-engineer`
   - Aceite: reenviar o mesmo lote 3× não duplica nada; leituras chegando fora de ordem geram o mesmo resultado.
 - [ ] **5.5** Domínio `PlateMatcher` (puro): normalização, caracteres confundíveis (O/0, I/1, B/8, S/5, Z/2, G/6), deduplicação de leituras repetidas (< 60 s), pareamento entrada↔saída por `captured_at`, limiar de confiança → `needs_review` — `backend-engineer`
   - Aceite: ≥ 30 cenários tabulares (saída sem entrada, entrada sem saída, placa lida errada 1 caractere, mesma placa volta no dia, lote do fim do dia chegando depois de leituras em tempo real, virada da meia-noite).
@@ -123,7 +125,7 @@ Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md` — **alvo: plan
 - [ ] **6.4** `StripeCardProvider` (test mode, Payment Intents) — `payments-engineer`
 - [ ] **6.5** Integração `payments` ↔ `sessions` via eventos; janela de saída; cobrança de diferença se expirar — `backend-engineer`
 - [ ] **6.6** Jobs `payments-reconcile` e estorno (parcial/total, auditado) — `payments-engineer`
-- [ ] **6.7** Recibo em PDF (worker → S3/minio local) e e-mail — `backend-engineer`
+- [ ] **6.7** Recibo em PDF (worker → S3; LocalStack em dev — ADR-0015) e e-mail — `backend-engineer`
 - [ ] **6.8** Web: modal de cobrança com Pix (QR + copia e cola + polling/WS), cartão, dinheiro com troco — `web-engineer`
 - [ ] **6.9** Testes: webhook duplicado, fora de ordem, perdido, valor divergente — `qa-engineer`
 - [ ] **6.10** Revisão de segurança (assinaturas, idempotência, dados de cartão nunca tocam o servidor) — `security-reviewer`
