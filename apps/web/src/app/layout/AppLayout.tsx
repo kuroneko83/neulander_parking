@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Outlet } from "react-router-dom";
 
 import { AppHeader } from "./AppHeader";
+import { Footer } from "./Footer";
 import { NavigationDrawer } from "./NavigationDrawer";
 
 /**
@@ -26,9 +27,15 @@ export function AppLayout() {
     <Box sx={{ display: "flex" }}>
       <AppHeader onToggleDrawer={handleToggleDrawer} />
       <NavigationDrawer open={drawerOpen} onClose={handleCloseDrawer} />
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, display: "flex", flexDirection: "column", minHeight: "100vh", p: 3 }}
+      >
         <Toolbar />
-        <Outlet />
+        <Box sx={{ flexGrow: 1 }}>
+          <Outlet />
+        </Box>
+        <Footer />
       </Box>
     </Box>
   );

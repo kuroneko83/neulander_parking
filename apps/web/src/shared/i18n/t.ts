@@ -30,6 +30,8 @@ const ptBR = {
   "error.title": "Algo deu errado",
   "error.description": "Ocorreu um erro inesperado ao carregar esta página.",
   "error.backHome": "Voltar para o início",
+  "footer.developedBy": "Desenvolvido por",
+  "footer.logoAlt": "Ikebukuro Technologies",
 } as const;
 
 export type DictionaryKey = keyof typeof ptBR;
