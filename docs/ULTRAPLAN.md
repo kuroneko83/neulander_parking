@@ -7,7 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.7 — `apps/web` (Vite/React/MUI): tema, layout, roteamento, TanStack Query (`fcb9bd2`)
+- **Última tarefa concluída:** 0.8 — Fronteiras de módulo automatizadas via `eslint-plugin-boundaries` (`318f4cf`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas.
@@ -48,7 +48,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
   - Aceite: testes unitários de placa (Mercosul/antiga/inválida) e integração do outbox (evento gravado na tx e publicado).
 - [x] **0.6** `packages/contracts` (Zod) e `packages/pricing` (vazio com teste de fumaça) com build `tsup` — `backend-engineer` (`1f8245f`)
 - [x] **0.7** `apps/web`: Vite + React 18 + MUI v5 (tema claro/escuro, pt-BR), React Router, TanStack Query, layout com AppBar/Drawer, página 404 — `web-engineer` (`fcb9bd2`)
-- [ ] **0.8** `eslint-plugin-boundaries` (ou dependency-cruiser) impedindo import entre internals de módulos — `architect`
+- [x] **0.8** `eslint-plugin-boundaries` (ou dependency-cruiser) impedindo import entre internals de módulos — `architect` (`318f4cf`)
 - [ ] **0.9** GitHub Actions: `ci.yml` (install com cache, lint, typecheck, unit, integration com services postgres/redis, build; job Python para `apps/edge-agent` com ruff + mypy + pytest quando existir); PR template; Dependabot/Renovate — `devops-engineer`
 - [ ] **0.10** Testcontainers helper (`apps/api/test/setup-int.ts`) subindo PostGIS + Redis e rodando migrations — `qa-engineer`
 - [ ] **0.11** Hook SessionStart do Claude Code (`.claude/hooks`) que roda `pnpm install` em sessões web — `devops-engineer`
