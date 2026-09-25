@@ -7,7 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.4 — Drizzle configurado, extensões do Postgres, `db:generate`/`migrate`/`seed` (`c30c399`)
+- **Última tarefa concluída:** 0.5 — Kernel `shared`: Clock, Cents, placas, Idempotency-Key, outbox+BullMQ (`a5c176b`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas.
@@ -44,7 +44,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [x] **0.2** `infra/docker/compose.yml`: `postgis/postgis:16`, `redis:7`, `axllent/mailpit`, LocalStack — S3 (imagens LPR/relatórios; substitui MinIO, descontinuado — ADR-0015); healthchecks; volume nomeado — `devops-engineer` (`b232d94`)
 - [x] **0.3** `apps/api` NestJS: `main.ts` + `main.worker.ts`, config validada com Zod, `nestjs-pino`, filtro de erros RFC 9457, `/health/live|ready`, Swagger em `/docs` — `backend-engineer` (`42ef216`)
 - [x] **0.4** Drizzle configurado (migrations em `apps/api/drizzle/`), extensões `postgis`, `btree_gist`, `pg_trgm`, `citext` na migration inicial; scripts `db:generate`/`db:migrate`/`db:seed` — `database-engineer` (`c30c399`)
-- [ ] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer`
+- [x] **0.5** Kernel `shared`: `DomainError`, `Clock` injetável, `Cents`, UUID v7, `normalizePlate()`/`maskPlate()`, interceptor de `Idempotency-Key`, `OutboxService` + relay worker — `backend-engineer` (`a5c176b`)
   - Aceite: testes unitários de placa (Mercosul/antiga/inválida) e integração do outbox (evento gravado na tx e publicado).
 - [ ] **0.6** `packages/contracts` (Zod) e `packages/pricing` (vazio com teste de fumaça) com build `tsup` — `backend-engineer`
 - [ ] **0.7** `apps/web`: Vite + React 18 + MUI v5 (tema claro/escuro, pt-BR), React Router, TanStack Query, layout com AppBar/Drawer, página 404 — `web-engineer`
