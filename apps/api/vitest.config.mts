@@ -9,6 +9,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // `test/unit/**`: testes de unidade que não pertencem a `src/` porque não testam código
+    // de produção, e sim tooling do workspace (ex.: `test/unit/eslint-boundaries.test.ts`,
+    // que roda o ESLint sobre a config de fronteiras de módulo).
+    include: ["src/**/*.test.ts", "test/unit/**/*.test.ts"],
   },
 });

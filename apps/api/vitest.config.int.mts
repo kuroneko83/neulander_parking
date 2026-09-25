@@ -10,7 +10,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["test/**/*.test.ts"],
+    // Só `*.int.test.ts`: `test/unit/**` também vive aqui (testes de tooling do workspace,
+    // que não têm lugar em `src/`) e roda no `pnpm test` normal, não aqui.
+    include: ["test/**/*.int.test.ts"],
     setupFiles: ["./test/setup-int.ts"],
     testTimeout: 20_000,
     hookTimeout: 20_000,

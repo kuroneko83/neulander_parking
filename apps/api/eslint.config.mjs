@@ -1,6 +1,8 @@
 // @ts-check
 import { createConfig } from "@neulander/config/eslint";
 
+import boundariesConfig from "./eslint.boundaries.mjs";
+
 export default [
   ...createConfig({ tsconfigRootDir: import.meta.dirname }),
   {
@@ -12,4 +14,8 @@ export default [
       "@typescript-eslint/no-extraneous-class": ["error", { allowWithDecorator: true }],
     },
   },
+  // Fronteiras de módulo (CLAUDE.md regras 1 e 2), automatizadas — ULTRAPLAN 0.8. Só aqui,
+  // e não no `packages/config` compartilhado: a estrutura `src/modules/<ctx>/<camada>` é da
+  // API. Roda no `pnpm lint` normal (`eslint . --max-warnings 0`), sem ferramenta à parte.
+  ...boundariesConfig,
 ];
