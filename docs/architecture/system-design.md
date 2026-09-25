@@ -15,13 +15,18 @@ Plataforma SaaS multi-tenant para estacionamentos privados (shoppings, prédios 
 | **Admin da plataforma** (`platform_admin`) | Painel web | Onboarding de organizações, suporte, métricas globais |
 | **Câmera + agente de borda** (dispositivo) | HTTPS (API de dispositivo) | Ler a placa de cada veículo na entrada/saída e enviar a leitura com horário, em tempo real ou em lote no fim do dia |
 
-### Escopo do MVP (Fases 0–8)
-Cadastro de estacionamentos/vagas, tabela de preços, entrada/saída pelo operador, **controle automático de
-entrada/saída por câmera com leitura de placa (LPR) e relatório diário para o dono**, cálculo de tarifa,
-pagamento (Pix + cartão + dinheiro), ocupação em tempo real, app do motorista com busca no mapa e pagamento de sessão.
+### Escopo deste protótipo (Fases 0–7 · M3, decisão de 2026-09-25)
+Foco em automatizar a operação para o **dono do estacionamento**, sem app para clientes finais por enquanto
+(ver `CLAUDE.md`): cadastro de estacionamentos/vagas, tabela de preços, entrada/saída pelo operador, **controle
+automático de entrada/saída por câmera com leitura de placa (LPR) e relatório diário para o dono**, cálculo de
+tarifa, pagamento na guarita (Pix + cartão + dinheiro), ocupação em tempo real para o dono/gestor.
 
-### Pós-MVP (Fases 9+)
-Reservas antecipadas, mensalistas, relatórios de período, abertura automática de cancela, sensores IoT.
+### Fora do escopo por enquanto (Fases 8–9)
+App do motorista (busca no mapa, pagamento pelo app) e reservas antecipadas — voltados a clientes finais, mantidos
+só como estrutura/contratos até essa decisão de escopo ser revista.
+
+### Pós-MVP original (Fases 10+, quando revisitado)
+Mensalistas, relatórios de período, abertura automática de cancela, sensores IoT.
 
 ## 2. Requisitos não funcionais
 

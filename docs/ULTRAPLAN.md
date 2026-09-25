@@ -11,6 +11,9 @@
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` (não `5432`) por já haver outro Postgres nesta
   máquina de dev.
+- **Escopo do protótipo (2026-09-25):** alvo até **M3 (Fases 0–7)** — automação do controle de entrada/saída e
+  operação do dia a dia para o **dono do estacionamento**, sem app para clientes/motoristas por enquanto. Fases 8
+  e 9 ficam só como estrutura/contratos (ver notas nos cabeçalhos de cada fase abaixo). Ver `CLAUDE.md`.
 
 ## Visão geral das fases
 
@@ -24,8 +27,8 @@
 | 5 | Câmera LPR & relatório diário | Uma câmera lê placas na entrada e saída (tempo real ou lote no fim do dia) e o dono recebe o relatório diário por e-mail e WhatsApp | **M2 — Controle automático** |
 | 6 | Pagamentos | Pix e cartão com webhook, recibo | — |
 | 7 | Tempo real & dashboard | Ocupação ao vivo e KPIs do dia | **M3 — Painel completo** |
-| 8 | App do motorista | Busca no mapa, ticket via QR, pagar pelo app | **M4 — MVP público** |
-| 9 | Reservas | Reservar vaga com janela de tempo | — |
+| 8 | App do motorista ⚠️ *fora do escopo por ora* | Busca no mapa, ticket via QR, pagar pelo app | **M4 — MVP público** |
+| 9 | Reservas ⚠️ *fora do escopo por ora* | Reservar vaga com janela de tempo | — |
 | 10 | Mensalistas & relatórios | Planos mensais, faturas, relatórios de período (semana/mês) e exports | — |
 | 11 | Produção | AWS via Terraform, observabilidade, carga, modo degradado | **M5 — Produção** |
 | 12 | Stretch | Cancela automática, IoT, IA | — |
@@ -139,6 +142,11 @@ Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md` — **alvo: plan
 
 ## Fase 8 — App do motorista · Marco M4
 
+> ⚠️ **Fora do escopo deste protótipo por enquanto** (decisão de 2026-09-25, ver `CLAUDE.md`): este protótipo é
+> para o dono automatizar a operação, não um app para clientes finais. Ao chegar aqui, manter só contratos/estrutura
+> mínima para plugar depois (ex.: `packages/contracts` para os payloads, esqueleto do app Expo sem telas
+> funcionais) — não implementar as tarefas abaixo de ponta a ponta sem revisitar essa decisão com o usuário.
+
 - [ ] **8.1** `apps/mobile` Expo + expo-router + React Native Paper (tema alinhado ao MUI), `packages/api-client` compartilhado — `mobile-engineer`
 - [ ] **8.2** Auth (SecureStore), cadastro, veículos (placas) — `mobile-engineer`
 - [ ] **8.3** Mapa com lots próximos (disponibilidade + preço estimado via `packages/pricing`), filtros (coberto, EV, PCD), detalhe do lot — `mobile-engineer`
@@ -149,6 +157,9 @@ Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md` — **alvo: plan
 - [ ] **8.8** Build EAS (preview) + deploy de demo da API/web (Render/Fly) para portfólio — `devops-engineer`
 
 ## Fase 9 — Reservas
+
+> ⚠️ **Fora do escopo deste protótipo por enquanto** (mesma decisão da Fase 8) — reserva antecipada é um recurso
+> voltado ao motorista/cliente final. Manter só o schema/contratos como estrutura, sem implementar o fluxo completo.
 
 - [ ] **9.1** Schema `reservations` com exclusion constraint (ADR-0010) — `database-engineer`
 - [ ] **9.2** Domínio + casos de uso (criar com hold, confirmar via pagamento, cancelar com política, check-in automático na entrada pela placa, no-show) — `backend-engineer`

@@ -5,6 +5,13 @@ carro com **uma única câmera** e gera um **relatório diário para o dono (e-m
 mensalistas, relatórios) + **app mobile** para motoristas (buscar vagas, reservar, pagar, ticket digital).
 Projeto de portfólio fullstack — qualidade de código, testes e documentação importam tanto quanto features.
 
+> **Escopo deste protótipo (decisão de 2026-09-25):** o objetivo agora é automatizar o controle de entrada/saída
+> para o **dono do estacionamento** — não é um app voltado a clientes/motoristas. Alvo até **M3 (Fases 0–7)**:
+> cadastro, tarifação, sessões (manual e por câmera LPR), relatório diário, pagamento na guarita (Pix/cartão/dinheiro)
+> e dashboard de ocupação em tempo real para o dono. **Fase 8 (app do motorista) e Fase 9 (reservas) ficam só como
+> estrutura/contratos para plugar depois** — não implementar de ponta a ponta agora. Cuidado com over-engineering:
+> não construa nada pensando em uso por clientes finais até essa decisão ser revista.
+
 ## Leia antes de trabalhar
 
 | Documento | Quando ler |

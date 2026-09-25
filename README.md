@@ -3,8 +3,9 @@
 Plataforma SaaS para estacionamentos: **câmera com leitura de placa** na entrada/saída que registra automaticamente
 a hora de entrada e saída de cada carro (em tempo real ou enviando no fim do dia) e manda um **relatório diário ao dono por e-mail e WhatsApp**;
 **painel web** para operadores e gestores (entrada/saída, tarifas, mensalistas,
-relatórios, ocupação em tempo real) e **app mobile** para motoristas (buscar vagas no mapa, reservar, pagar com Pix/cartão,
-ticket digital).
+relatórios, ocupação em tempo real). Um **app mobile** para motoristas (buscar vagas, reservar, pagar,
+ticket digital) está desenhado na arquitetura, mas fica fora do escopo deste protótipo por enquanto — o foco
+agora é automatizar a operação para o **dono do estacionamento**, não um app para clientes finais.
 
 > 🚧 Em construção — desenvolvido fase a fase com Claude Code seguindo o [ULTRAPLAN](docs/ULTRAPLAN.md).
 
