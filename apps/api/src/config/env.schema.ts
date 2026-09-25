@@ -5,9 +5,10 @@ import { z } from "zod";
  * `@nestjs/config`'s `validate` option (see app-config.module.ts). Fails fast with a
  * readable error instead of letting the app start with `undefined` config.
  *
- * Scope: only the variables this layer (HTTP/worker bootstrap, logging, health checks)
- * actually needs today — NODE_ENV, API_PORT, API_HOST, CORS_ORIGIN, LOG_LEVEL,
- * DATABASE_URL, REDIS_URL (see .env.example and system-design.md §9).
+ * Scope: only the variables this layer (HTTP/worker bootstrap, logging, health checks,
+ * shared Drizzle pool) actually needs today — NODE_ENV, API_PORT, API_HOST, CORS_ORIGIN,
+ * LOG_LEVEL, DATABASE_URL, DATABASE_POOL_MIN/MAX, REDIS_URL (see .env.example and
+ * system-design.md §9).
  *
  * Deliberately NOT included yet: JWT/S3/SES/WhatsApp/Mercado Pago/Stripe variables.
  * They exist in .env.example but nothing in the codebase consumes them yet, and several
@@ -40,6 +41,10 @@ export const envSchema = z.object({
     .string()
     .min(1, "DATABASE_URL é obrigatório")
     .regex(/^postgres(ql)?:\/\//, "DATABASE_URL precisa começar com postgres:// ou postgresql://"),
+  // Tamanho do pool `pg` compartilhado (ULTRAPLAN 0.4, DatabaseModule) — já previstos em
+  // .env.example desde a tarefa 0.1, sem consumidor até agora.
+  DATABASE_POOL_MIN: z.coerce.number().int().min(0).default(2),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
 
   REDIS_URL: z
     .string()

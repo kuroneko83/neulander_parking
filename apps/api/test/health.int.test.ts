@@ -58,7 +58,14 @@ describe("GET /health/ready (dependency unreachable)", () => {
   // Compose services — see the file header and the task's test plan.
   const unreachableAppConfig: Pick<
     AppConfigService,
-    "nodeEnv" | "isProduction" | "http" | "corsOrigins" | "logLevel" | "databaseUrl" | "redisUrl"
+    | "nodeEnv"
+    | "isProduction"
+    | "http"
+    | "corsOrigins"
+    | "logLevel"
+    | "databaseUrl"
+    | "databasePool"
+    | "redisUrl"
   > = {
     nodeEnv: "test",
     isProduction: false,
@@ -66,6 +73,9 @@ describe("GET /health/ready (dependency unreachable)", () => {
     corsOrigins: ["http://localhost:5173"],
     logLevel: "silent",
     databaseUrl: "postgresql://neulander:neulander@127.0.0.1:1/neulander_parking",
+    // DatabaseModule's shared pool (ULTRAPLAN 0.4) reads this too now that
+    // DatabaseHealthIndicator borrows a connection from it instead of opening its own.
+    databasePool: { min: 0, max: 1 },
     redisUrl: "redis://127.0.0.1:1",
   };
 

@@ -58,6 +58,13 @@ describe("validateEnv", () => {
     expect(env.LOG_LEVEL).toBe("info");
   });
 
+  it("applies defaults for DATABASE_POOL_MIN/MAX when omitted", () => {
+    const env = validateEnv(validEnv);
+
+    expect(env.DATABASE_POOL_MIN).toBe(2);
+    expect(env.DATABASE_POOL_MAX).toBe(10);
+  });
+
   const requiredVars: (keyof typeof validEnv)[] = ["DATABASE_URL", "REDIS_URL"];
 
   it.each(requiredVars)("throws a clear error when %s is missing", (key) => {

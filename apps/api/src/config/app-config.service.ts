@@ -40,6 +40,13 @@ export class AppConfigService {
     return this.configService.get("DATABASE_URL", { infer: true });
   }
 
+  get databasePool(): { min: number; max: number } {
+    return {
+      min: this.configService.get("DATABASE_POOL_MIN", { infer: true }),
+      max: this.configService.get("DATABASE_POOL_MAX", { infer: true }),
+    };
+  }
+
   get redisUrl(): string {
     return this.configService.get("REDIS_URL", { infer: true });
   }
