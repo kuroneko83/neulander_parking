@@ -10,8 +10,12 @@ export { type Clock, FakeClock } from "./domain/clock";
 export { DomainError } from "./domain/domain-error";
 export type { DomainEvent } from "./domain/domain-event";
 export { newId } from "./domain/id";
-export { addCents, type Cents, isCents, subtractCents, toCents, ZERO_CENTS } from "./domain/money";
 export { maskPlate, normalizePlate } from "./domain/plate";
+
+// Note: `Cents`/`toCents`/etc. moved to `@neulander/contracts` (ULTRAPLAN 0.6) — it's a
+// wire-level contract shared with web/mobile, not an API-internal kernel concept, so other
+// modules import it directly from `@neulander/contracts` (same as they'd import `zod`
+// itself), not through this barrel.
 
 // --- infra (Nest/Drizzle wiring) ---
 // Note: `infra/schema.ts`'s tables (`outboxEvents`, `idempotencyKeys`) are deliberately

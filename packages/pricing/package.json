@@ -1,0 +1,35 @@
+{
+  "name": "@neulander/pricing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Motor de tarifação (funções puras, 100% testado) — vazio até ULTRAPLAN 3.1; este scaffold (ULTRAPLAN 0.6) só prova o pipeline de build/test/lint do pacote.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@neulander/config": "workspace:*"
+  }
+}

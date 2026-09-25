@@ -1,0 +1,38 @@
+{
+  "name": "@neulander/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Schemas Zod, tipos e eventos de domínio compartilhados entre API, web, mobile e edge-agent — fonte única de verdade (ADR-0002, CLAUDE.md regra 3). ULTRAPLAN 0.6.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@neulander/config": "workspace:*"
+  }
+}

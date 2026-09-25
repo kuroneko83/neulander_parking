@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@neulander/config/tsconfig/library.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Overridden (not just inherited) so they resolve relative to THIS file, not to
+    // @neulander/config's own directory — see apps/api/tsconfig.json for the same fix
+    // applied for the same reason (TS resolves inherited relative paths against the base
+    // config's location, not the extending file's).
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

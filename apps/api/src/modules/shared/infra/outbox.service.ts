@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { DomainEventSchema } from "@neulander/contracts";
 
 import type { Database } from "../../../database/database.module";
 import type { DomainEvent } from "../domain/domain-event";
@@ -35,6 +36,24 @@ interface StoredEnvelope {
 @Injectable()
 export class OutboxService {
   async record(tx: Database, event: DomainEvent): Promise<void> {
+    // Validates the wire envelope subset of `event` against `@neulander/contracts`'s
+    // `DomainEventSchema` (ULTRAPLAN 0.6) before it ever reaches Postgres — a real, RUNTIME
+    // `require("@neulander/contracts")` from the compiled CJS app (not just a type-level
+    // import), catching a malformed envelope (e.g. a non-UUID `aggregateId`, a negative
+    // `version`) at the boundary where an event enters persistence, before it's ever
+    // published to consumers. Throws Zod's `ZodError` — a producer building a malformed
+    // envelope is a programmer error, not a request-time validation failure, so this is
+    // deliberately NOT wrapped as a `DomainError`/HTTP response here.
+    DomainEventSchema.parse({
+      id: event.id,
+      type: event.type,
+      version: event.version,
+      occurredAt: event.occurredAt,
+      aggregateId: event.aggregateId,
+      organizationId: event.organizationId,
+      payload: event.payload,
+    });
+
     const envelope: StoredEnvelope = {
       id: event.id,
       type: event.type,

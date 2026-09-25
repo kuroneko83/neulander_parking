@@ -21,6 +21,7 @@
     "db:seed": "tsx src/database/seed.ts"
   },
   "dependencies": {
+    "@neulander/contracts": "workspace:*",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^10",
     "@nestjs/config": "^3",
