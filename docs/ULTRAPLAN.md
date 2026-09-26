@@ -7,8 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 1 — Identidade & organizações
-- **Última tarefa concluída:** 0.9 — GitHub Actions CI, PR template, Dependabot; CI verde de verdade no GitHub
-  após corrigir `turbo.json` (`2c177e4`) — **Fase 0 completa.**
+- **Última tarefa concluída:** 1.1 — Contracts de identidade: RegisterInput/LoginInput/TokenPair/Me/Role (`f346e9a`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas. `git push` nesta máquina precisa contornar
@@ -59,7 +58,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 
 ## Fase 1 — Identidade & organizações
 
-- [ ] **1.1** Contracts: `RegisterInput`, `LoginInput`, `TokenPair`, `Me`, `Role` — `backend-engineer`
+- [x] **1.1** Contracts: `RegisterInput`, `LoginInput`, `TokenPair`, `Me`, `Role` — `backend-engineer` (`f346e9a`)
 - [ ] **1.2** Schema `users`, `organizations`, `memberships`, `refresh_tokens` + seed (platform_admin, org demo, gestor, operador, motorista) — `database-engineer`
 - [ ] **1.3** Registro/login com argon2id, JWT RS256 (15 min), refresh rotativo com detecção de reuso (revoga família) — `backend-engineer`
 - [ ] **1.4** Guards: `JwtAuthGuard`, `@Roles()`, `OrgScopeGuard` (valida `:orgId` ∈ memberships; operador limitado a `parking_lot_ids`) — `backend-engineer`
