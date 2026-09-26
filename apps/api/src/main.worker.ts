@@ -11,7 +11,7 @@ import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
 
 import { AppModule } from "./app.module";
-import { OutboxRelayProcessor } from "./modules/shared";
+import { DomainEventsProcessor, OutboxRelayProcessor } from "./modules/shared";
 
 /**
  * Worker entrypoint (ULTRAPLAN 0.3, outbox relay wired in 0.5). Same source/AppModule as
@@ -38,6 +38,22 @@ async function bootstrap(): Promise<void> {
   outboxRelay.start();
   logger.log("Worker iniciado — outbox relay em execução (ULTRAPLAN 0.5).", "Worker");
 
+  // Same reasoning as `outboxRelay.start()` above (ADR-0017 §4): `DomainEventsProcessor`'s
+  // BullMQ `Worker` is constructed with `autorun: false` in BOTH entrypoints (`AppModule` is
+  // shared), so it never pulls a job from Redis on its own — only this explicit `.run()`,
+  // called exclusively here, starts it consuming the `domain-events` queue.
+  //
+  // Deliberately NOT awaited (code review fix — awaiting this blocked `bootstrap()` forever
+  // and skipped registering the SIGTERM/SIGINT handlers below entirely): BullMQ's
+  // `Worker.run()` doesn't resolve until the worker is closed — it's the same
+  // "fire-and-forget, `.catch()` for the unhandled-rejection case" shape as
+  // `outboxRelay.start()`'s own `setInterval`, not something to `await`.
+  const domainEventsProcessor = app.get(DomainEventsProcessor);
+  domainEventsProcessor.worker.run().catch((error: unknown) => {
+    logger.error(error, "Erro no despachante de eventos de domínio", "Worker");
+  });
+  logger.log("Worker iniciado — despachante de eventos de domínio em execução (ADR-0017).", "Worker");
+
   let shuttingDown = false;
   const shutdown = (signal: NodeJS.Signals): void => {
     // Guard against a second SIGTERM/SIGINT arriving mid-shutdown (e.g. an
@@ -51,13 +67,20 @@ async function bootstrap(): Promise<void> {
 
     logger.log(`Recebido ${signal}, encerrando worker...`, "Worker");
     outboxRelay.stop();
-    app
+    domainEventsProcessor.worker
       .close()
       .catch((error: unknown) => {
-        logger.error(error, "Erro ao encerrar o worker", "Worker");
+        logger.error(error, "Erro ao encerrar o despachante de eventos de domínio", "Worker");
       })
       .finally(() => {
-        process.exit(0);
+        app
+          .close()
+          .catch((error: unknown) => {
+            logger.error(error, "Erro ao encerrar o worker", "Worker");
+          })
+          .finally(() => {
+            process.exit(0);
+          });
       });
   };
 

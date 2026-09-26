@@ -18,6 +18,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -186,5 +187,69 @@ export const refreshTokens = pgTable(
     unique("refresh_tokens_token_hash_unique").on(table.tokenHash),
     index("refresh_tokens_user_id_idx").on(table.userId),
     index("refresh_tokens_family_id_idx").on(table.familyId),
+  ],
+);
+
+/**
+ * `invitations` (data-model.md `identity` table, row 5; ULTRAPLAN 1.5 — `POST
+ * /v1/orgs/:orgId/members`). `email` is `citext` (same reasoning as `users.email`): a
+ * pending-invite lookup/uniqueness check must not depend on the caller's/invitee's casing.
+ *
+ * `role`/`parking_lot_ids` mirror `memberships`' own columns exactly (same enum values,
+ * same "empty array = todos" convention) — an invitation is, structurally, a not-yet-created
+ * membership. `parking_lot_ids` is always written as `[]` today
+ * (`InviteMemberUseCase`/`ParkingLotScopeUnavailableError` reject anything else) but the
+ * column exists now, matching `memberships`, so accepting a real scope later (Phase 2) is a
+ * use-case change, not a new migration.
+ *
+ * `token_hash` (never the plaintext token — data-model.md: "token_hash (sha256 do token
+ * opaco — nunca o token)") is `unique`, doubling as the lookup index for
+ * `GetInvitationUseCase`/`AcceptInvitationUseCase`'s "does this presented token exist".
+ *
+ * `expires_at`/`accepted_at`/`accepted_by_user_id`/`revoked_at` together encode the
+ * invitation's lifecycle (pending → accepted, or pending → expired/revoked) WITHOUT a
+ * separate `status` column — data-model.md doesn't list one, and every state is already
+ * derivable from these four timestamps/ids (a `status` column would just be a cache of that
+ * derivation, one more thing that could drift out of sync with the timestamps themselves).
+ *
+ * Partial unique index `invitations_org_email_pending_unique` (data-model.md: "unique
+ * parcial(organization_id, email) where accepted_at is null and revoked_at is null" — "um
+ * convite pendente por e-mail/org"): once an invitation is accepted or revoked, the SAME
+ * e-mail can be invited again to the same org without hitting this constraint — it only
+ * ever blocks a SECOND still-pending invitation for the same e-mail/org pair.
+ */
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    email: citext("email").notNull(),
+    role: text("role").notNull(),
+    parkingLotIds: uuid("parking_lot_ids").array().notNull().default([]),
+    tokenHash: text("token_hash").notNull(),
+    invitedByUserId: uuid("invited_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedByUserId: uuid("accepted_by_user_id").references(() => users.id),
+    // No writer yet (security-review gap, tracked in ULTRAPLAN's task 1.5 note, to be
+    // closed or formally accepted before 1.8 signs off Fase 1): the column/constraint/index
+    // support revocation, but no use case/endpoint sets this — an issued invite is
+    // redeemable for its full 7-day TTL regardless of what happens to the inviter/invitee
+    // afterward.
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("invitations_token_hash_unique").on(table.tokenHash),
+    uniqueIndex("invitations_org_email_pending_unique")
+      .on(table.organizationId, table.email)
+      .where(sql`${table.acceptedAt} is null and ${table.revokedAt} is null`),
+    index("invitations_organization_id_idx").on(table.organizationId),
+    check("invitations_role_check", sql`${table.role} IN ('owner', 'manager', 'operator')`),
   ],
 );

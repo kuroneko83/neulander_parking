@@ -2,18 +2,18 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { generateOpaqueRefreshToken, hashOpaqueToken } from "./refresh-token-crypto";
+import { generateOpaqueToken, hashOpaqueToken } from "./opaque-token";
 
-describe("generateOpaqueRefreshToken", () => {
+describe("generateOpaqueToken", () => {
   it("returns a 64-character hex string (256 bits)", () => {
-    const token = generateOpaqueRefreshToken();
+    const token = generateOpaqueToken();
 
     expect(token).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("returns a different token on every call", () => {
-    const a = generateOpaqueRefreshToken();
-    const b = generateOpaqueRefreshToken();
+    const a = generateOpaqueToken();
+    const b = generateOpaqueToken();
 
     expect(a).not.toBe(b);
   });
@@ -21,7 +21,7 @@ describe("generateOpaqueRefreshToken", () => {
 
 describe("hashOpaqueToken", () => {
   it("is deterministic — the same input always hashes to the same output", () => {
-    const token = generateOpaqueRefreshToken();
+    const token = generateOpaqueToken();
 
     expect(hashOpaqueToken(token)).toBe(hashOpaqueToken(token));
   });

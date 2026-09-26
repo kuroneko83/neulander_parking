@@ -7,7 +7,7 @@ import { CLOCK, type Clock, newId } from "../../shared";
 import type { AccessTokenClaims } from "../domain/access-token-claims";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError } from "../domain/auth-errors";
 import { addDays } from "../domain/dates";
-import { generateOpaqueRefreshToken, hashOpaqueToken } from "../domain/refresh-token-crypto";
+import { generateOpaqueToken, hashOpaqueToken } from "../domain/opaque-token";
 import {
   ACCESS_TOKEN_SERVICE,
   type AccessTokenServicePort,
@@ -94,7 +94,7 @@ export class RefreshTokenUseCase {
       }
 
       const newRefreshId = newId();
-      const newRefreshPlain = generateOpaqueRefreshToken();
+      const newRefreshPlain = generateOpaqueToken();
 
       // Insert the NEW row before revoking the old one: `replaced_by` is a real FK to
       // `refresh_tokens.id` (data-model.md), so pointing the old row at a new row that

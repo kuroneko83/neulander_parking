@@ -66,6 +66,9 @@ describe("GET /health/ready (dependency unreachable)", () => {
     | "databaseUrl"
     | "databasePool"
     | "redisUrl"
+    | "smtpUrl"
+    | "emailFrom"
+    | "webAppUrl"
   > = {
     nodeEnv: "test",
     isProduction: false,
@@ -77,6 +80,14 @@ describe("GET /health/ready (dependency unreachable)", () => {
     // DatabaseHealthIndicator borrows a connection from it instead of opening its own.
     databasePool: { min: 0, max: 1 },
     redisUrl: "redis://127.0.0.1:1",
+    // ULTRAPLAN 1.5: `NotificationsModule`'s `SmtpEmailChannel` reads `smtpUrl` eagerly, in
+    // its OWN constructor (`nodemailer.createTransport(...)`) — every test that boots the
+    // real `AppModule` (this one included) instantiates it, so this partial
+    // `AppConfigService` override needs a syntactically valid value even though nothing in
+    // this test suite ever calls `SmtpEmailChannel.send()`.
+    smtpUrl: "smtp://127.0.0.1:1",
+    emailFrom: "relatorios@neulander-parking.example.com",
+    webAppUrl: "http://localhost:5173",
   };
 
   let app: INestApplication;

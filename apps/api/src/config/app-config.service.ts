@@ -87,4 +87,21 @@ export class AppConfigService {
   get passwordPepper(): string {
     return this.configService.get("PASSWORD_PEPPER", { infer: true });
   }
+
+  get webAppUrl(): string {
+    return this.configService.get("WEB_APP_URL", { infer: true });
+  }
+
+  /** `SMTP_URL` if set, else `SMTP_DEV_URL` (env.schema.ts's fallback — see that file's
+   * comment; `SMTP_DEV_URL` always has a default, so this never returns an empty string). */
+  get smtpUrl(): string {
+    const primary = this.configService.get("SMTP_URL", { infer: true });
+    return primary && primary.length > 0
+      ? primary
+      : this.configService.get("SMTP_DEV_URL", { infer: true });
+  }
+
+  get emailFrom(): string {
+    return this.configService.get("EMAIL_FROM", { infer: true });
+  }
 }

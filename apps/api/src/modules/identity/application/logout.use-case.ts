@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import { type Database, DATABASE_CONNECTION } from "../../../database/database.module";
 import { CLOCK, type Clock } from "../../shared";
-import { hashOpaqueToken } from "../domain/refresh-token-crypto";
+import { hashOpaqueToken } from "../domain/opaque-token";
 import {
   REFRESH_TOKENS_REPOSITORY,
   type RefreshTokensRepositoryPort,

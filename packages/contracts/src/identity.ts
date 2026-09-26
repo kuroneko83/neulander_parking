@@ -151,3 +151,102 @@ export const MeSchema = z.object({
   memberships: z.array(MembershipSchema),
 });
 export type Me = z.infer<typeof MeSchema>;
+
+/**
+ * `POST /v1/orgs/:orgId/members` (ULTRAPLAN 1.5, api-and-events.md: "Convida
+ * operador/gestor por e-mail (token de aceite)"). `parkingLotIds` is accepted here (mirrors
+ * `MembershipSchema.parkingLotIds`'s shape) but the use case rejects any non-empty array with
+ * `400 PARKING_LOT_SCOPE_UNAVAILABLE` for now — `data-model.md`'s `memberships.parking_lot_ids`
+ * has no FK to `parking_lots` yet (that table doesn't exist until Phase 2) and this contract
+ * can't validate "does this id belong to the inviter's own org" itself, so accepting a
+ * non-empty scope here would silently persist unvalidated org-external ids (see ULTRAPLAN
+ * 2.2's own prerequisite note). Kept as a field (not omitted) so the wire shape doesn't need
+ * to change the day Phase 2 lifts this restriction — only the use case's check does.
+ */
+export const CreateInvitationInputSchema = z.object({
+  email: z.email(),
+  role: OrganizationRoleSchema,
+  parkingLotIds: z.array(z.uuid()).default([]),
+});
+export type CreateInvitationInput = z.infer<typeof CreateInvitationInputSchema>;
+
+/**
+ * Response of `POST /v1/orgs/:orgId/members` — the created `invitations` row, MINUS
+ * `tokenHash`/the plaintext token itself (api-and-events.md: "Resposta **nunca** devolve o
+ * token" — the token only ever reaches the invitee via the `identity.member_invited.v1`
+ * e-mail, `MemberInvitedPayloadSchema` below).
+ */
+export const InvitationViewSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  email: z.email(),
+  role: OrganizationRoleSchema,
+  parkingLotIds: z.array(z.uuid()),
+  expiresAt: z.date(),
+  createdAt: z.date(),
+});
+export type InvitationView = z.infer<typeof InvitationViewSchema>;
+
+/**
+ * Response of `GET /v1/invitations/:token` (public — "Dados para a tela de aceite",
+ * api-and-events.md) — deliberately NOT the same shape as `InvitationViewSchema`: this is a
+ * read model for the accept screen (organization name, not id; whether the invited e-mail
+ * already has an account, so the web client knows whether to render the "set a password"
+ * fields or just a "log in to accept" button), not a projection of the `invitations` row
+ * itself. `GetInvitationUseCase` returns this same generic shape for every failure mode
+ * (unknown/expired/revoked/already-accepted token) too — as a `404`, never as this schema —
+ * so nothing about "why" a token doesn't resolve ever needs a field here.
+ */
+export const InvitationPreviewSchema = z.object({
+  organizationName: z.string().min(1),
+  role: OrganizationRoleSchema,
+  email: z.email(),
+  expiresAt: z.date(),
+  userExists: z.boolean(),
+});
+export type InvitationPreview = z.infer<typeof InvitationPreviewSchema>;
+
+/**
+ * Body of `POST /v1/invitations/:token/accept` (public). Both fields are optional at the
+ * schema level because the same endpoint serves two branches (api-and-events.md): the
+ * invited e-mail has no `users` row yet → body carries `{ name, password }` to create one;
+ * the e-mail already has an account → body is empty (`{}`), the caller is expected to log in
+ * separately. Which branch applies is a fact the use case resolves against the invitation's
+ * own e-mail (never something the client can plausibly know without an extra round trip
+ * through `GET /v1/invitations/:token`'s `userExists` field), so "name/password required
+ * when there's no existing account" is enforced by `AcceptInvitationUseCase`
+ * (`INVITATION_ACCEPT_MISSING_CREDENTIALS`), not by this DTO.
+ */
+export const AcceptInvitationInputSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  password: z.string().min(8).max(100).optional(),
+});
+export type AcceptInvitationInput = z.infer<typeof AcceptInvitationInputSchema>;
+
+/**
+ * Payload of the `identity.member_invited.v1` domain event (api-and-events.md's event
+ * table; ADR-0017 §"Consequências" explicitly calls this event out as the first one whose
+ * payload carries a secret). `token` is the PLAINTEXT opaque accept token — never
+ * `tokenHash` — because `notifications` (the only documented consumer) needs it to build the
+ * accept URL it e-mails to the invitee; there is no other channel for the token to reach
+ * them, since `InvitationViewSchema`/the HTTP response never carries it (CLAUDE.md rule 10 +
+ * ADR-0017: this is exactly why the outbox/BullMQ payload must never be logged verbatim).
+ * `expiresAt` is a STRING (ISO 8601), not `z.date()` like `InvitationViewSchema`'s: by the
+ * time a handler reads this off `job.data`, it has round-tripped through `outbox_events`
+ * (jsonb) and BullMQ (Redis, JSON-serialized) at least once — both hops serialize a `Date`
+ * to its ISO string and never revive it back to a `Date` on the way out, so the wire shape a
+ * real consumer observes is a string, not a `Date` instance (see
+ * `DomainEventsProcessor`/`OutboxService` for where the envelope's own `occurredAt` gets the
+ * same treatment explicitly).
+ */
+export const MemberInvitedPayloadSchema = z.object({
+  invitationId: z.uuid(),
+  organizationId: z.uuid(),
+  organizationName: z.string().min(1),
+  email: z.email(),
+  role: OrganizationRoleSchema,
+  invitedByUserId: z.uuid(),
+  token: z.string().min(1),
+  expiresAt: z.string().min(1),
+});
+export type MemberInvitedPayload = z.infer<typeof MemberInvitedPayloadSchema>;

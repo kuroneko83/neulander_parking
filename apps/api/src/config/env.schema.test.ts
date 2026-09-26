@@ -167,4 +167,31 @@ describe("validateEnv", () => {
       validateEnv({ ...validEnv, PASSWORD_PEPPER: "x".repeat(32) }),
     ).not.toThrow();
   });
+
+  it("applies defaults for WEB_APP_URL, SMTP_DEV_URL and EMAIL_FROM when omitted", () => {
+    const env = validateEnv(validEnv);
+
+    expect(env.WEB_APP_URL).toBe("http://localhost:5173");
+    expect(env.SMTP_DEV_URL).toBe("smtp://localhost:1025");
+    expect(env.EMAIL_FROM).toBe("relatorios@neulander-parking.example.com");
+    expect(env.SMTP_URL).toBeUndefined();
+  });
+
+  it("accepts an explicit SMTP_URL, taking precedence over SMTP_DEV_URL's default", () => {
+    const env = validateEnv({ ...validEnv, SMTP_URL: "smtps://user:pass@smtp.example.com:587" });
+
+    expect(env.SMTP_URL).toBe("smtps://user:pass@smtp.example.com:587");
+  });
+
+  it("throws when WEB_APP_URL doesn't look like an http(s) URL", () => {
+    expect(() => validateEnv({ ...validEnv, WEB_APP_URL: "ftp://example.com" })).toThrow();
+  });
+
+  it("throws when SMTP_URL doesn't look like an smtp(s) connection string", () => {
+    expect(() => validateEnv({ ...validEnv, SMTP_URL: "http://example.com" })).toThrow();
+  });
+
+  it("throws when EMAIL_FROM is not a valid e-mail address", () => {
+    expect(() => validateEnv({ ...validEnv, EMAIL_FROM: "not-an-email" })).toThrow();
+  });
 });

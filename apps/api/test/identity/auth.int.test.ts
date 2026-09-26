@@ -520,7 +520,7 @@ describe("auth: register, login, refresh, logout, /v1/me (real Postgres from com
   });
 });
 
-// Mirrors `domain/refresh-token-crypto.ts`'s `hashOpaqueToken` exactly (SHA-256 hex) so
+// Mirrors `domain/opaque-token.ts`'s `hashOpaqueToken` exactly (SHA-256 hex) so
 // this test file can look a presented plaintext token up by its stored hash without
 // importing across the module boundary from `test/` into `src/modules/identity/domain/`
 // (tests are exempt from the eslint boundaries rule, but there's no need to reach for that

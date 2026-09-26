@@ -1,5 +1,10 @@
 import type { ArgumentsHost, ExceptionFilter } from "@nestjs/common";
 import { Catch, HttpException, HttpStatus } from "@nestjs/common";
+// `drizzle-orm/errors` — a small, side-effect-free subpath (just the error class
+// declarations, no DB/env touching) — same reasoning as `DomainError`'s own import below for
+// why this is safe to pull straight in rather than through a barrel: nothing here eagerly
+// validates `process.env`/opens a connection.
+import { DrizzleQueryError } from "drizzle-orm/errors";
 import type { Response } from "express";
 import { PinoLogger } from "nestjs-pino";
 
@@ -49,6 +54,54 @@ interface DescribedError {
 }
 
 /**
+ * Security-review fix (ULTRAPLAN 1.5, same LGPD/log-hygiene concern as the unique-violation
+ * translation in `invitations.repository.ts`/`memberships.repository.ts`, just a different
+ * trigger): `DrizzleQueryError` (`drizzle-orm/errors`) builds its OWN `.message` as
+ * `` `Failed query: ${query}\nparams: ${params}` `` and exposes `query`/`params` as regular
+ * own (enumerable) instance properties — pino's default `err` serializer copies all of that
+ * verbatim, and `.stack` ALSO embeds `.message` (V8 prepends `name: message` to a captured
+ * stack trace) — so simply omitting `query`/`params` from a shallow copy isn't enough, three
+ * different properties on the same object all carry the bound SQL parameters (an invitee's
+ * e-mail, an argon2 password hash, a token hash, ...).
+ *
+ * This isn't only about the two unique-violation cases those two repositories already
+ * translate to a `DomainError` before this filter ever sees them — the SAME
+ * `DrizzleQueryError` shape (and therefore the same leak) happens for ANY other query
+ * failure this codebase doesn't specifically translate: a check/FK violation, a statement
+ * timeout, connection churn, etc. This filter is shared by every module (`APP_FILTER`), so
+ * fixing it here — rather than in each repository — closes the gap for all of them, present
+ * and future, in one place.
+ *
+ * Builds a BRAND NEW, minimal plain object with only an allowlist of safe fields
+ * (`name`, a fixed generic `message`, and `code`/`constraint` off the real driver error at
+ * `.cause` — e.g. Postgres' own `DatabaseError`, never the query/params) — never a shallow
+ * copy/mutation of the original error, so nothing on it (including `.stack`) can leak
+ * through by accident.
+ */
+function sanitizeDrizzleQueryErrorForLogging(error: DrizzleQueryError): Record<string, unknown> {
+  const cause = error.cause as { code?: unknown; constraint?: unknown } | undefined;
+
+  return {
+    name: "DrizzleQueryError",
+    message:
+      "Falha de consulta ao banco de dados — query/params omitidos do log (LGPD, CLAUDE.md regra 10).",
+    ...(typeof cause?.code === "string" ? { code: cause.code } : {}),
+    ...(typeof cause?.constraint === "string" ? { constraint: cause.constraint } : {}),
+  };
+}
+
+/** Only ever transforms the LOGGED representation of an exception — never the value used to
+ * build the HTTP response (`toProblemDetails`), which already falls back to the generic,
+ * client-safe "Internal Server Error" body for anything that isn't a `DomainError`/
+ * `HttpException` (i.e. exactly the `DrizzleQueryError` case this function handles). */
+function sanitizeForLogging(exception: unknown): unknown {
+  if (exception instanceof DrizzleQueryError) {
+    return sanitizeDrizzleQueryErrorForLogging(exception);
+  }
+  return exception;
+}
+
+/**
  * Global error filter (ULTRAPLAN 0.3): every unhandled exception becomes
  * `application/problem+json` in the shape `{ type, title, status, detail, code, errors? }`
  * (docs/architecture/api-and-events.md line 12). Registered as `APP_FILTER` in
@@ -66,7 +119,7 @@ export class ProblemDetailsExceptionFilter implements ExceptionFilter {
     const problem = this.toProblemDetails(exception);
 
     if (problem.status >= 500) {
-      this.logger.error({ err: exception }, "Exceção não tratada");
+      this.logger.error({ err: sanitizeForLogging(exception) }, "Exceção não tratada");
     }
 
     response

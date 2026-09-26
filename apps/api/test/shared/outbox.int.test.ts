@@ -158,4 +158,69 @@ describe("Transactional outbox -> BullMQ relay (real Postgres + Redis from compo
     const job = await queue.getJob(event.id);
     expect(job).toBeUndefined();
   });
+
+  /**
+   * Security-review fix (ULTRAPLAN 1.5): `identity.member_invited.v1`'s payload carries the
+   * plaintext invitation accept token (needed by `notifications` to build the accept link —
+   * see `packages/contracts/src/identity.ts`'s `MemberInvitedPayloadSchema` doc comment).
+   * Nothing ever purges `outbox_events`, so once published the row would otherwise keep
+   * that secret in Postgres indefinitely — `OutboxRelayProcessor.pollOnce()` scrubs it
+   * right after a successful publish.
+   */
+  it("scrubs the plaintext token from a published identity.member_invited.v1 row, WITHOUT touching the BullMQ job's payload", async () => {
+    const event = buildEvent({
+      type: "identity.member_invited.v1",
+      payload: {
+        invitationId: newId(),
+        organizationId: newId(),
+        organizationName: "Estacionamento Demo",
+        email: "convidado@example.test",
+        role: "operator",
+        invitedByUserId: newId(),
+        token: "a-very-secret-plaintext-token-that-must-not-persist",
+        expiresAt: new Date().toISOString(),
+      },
+    });
+    eventIdsToCleanUp.push(event.id);
+
+    await db.transaction(async (tx) => {
+      await outboxService.record(tx, event);
+    });
+
+    await outboxRelay.pollOnce();
+
+    // (a) Postgres: the token is gone, but every OTHER payload field survives untouched.
+    const [row] = await db.select().from(outboxEvents).where(eq(outboxEvents.id, event.id));
+    expect(row).toBeDefined();
+    const storedPayload = row?.payload as { payload: Record<string, unknown> };
+    expect("token" in storedPayload.payload).toBe(false);
+    expect(storedPayload.payload).toMatchObject({
+      invitationId: event.payload["invitationId"],
+      email: event.payload["email"],
+      role: event.payload["role"],
+    });
+
+    // (b) BullMQ/Redis: the job the consumer (`notifications`) actually reads from still
+    // has the token — scrubbing is Postgres-only, the consumer needs it to build the link.
+    const job = await queue.getJob(event.id);
+    expect(job).toBeDefined();
+    expect((job?.data as { payload?: Record<string, unknown> }).payload).toMatchObject({
+      token: "a-very-secret-plaintext-token-that-must-not-persist",
+    });
+  });
+
+  it("does NOT scrub anything from a published event of a type not in the secret-fields denylist", async () => {
+    const event = buildEvent({ payload: { note: "no secret here", token: "not-actually-secret-for-this-type" } });
+    eventIdsToCleanUp.push(event.id);
+
+    await db.transaction(async (tx) => {
+      await outboxService.record(tx, event);
+    });
+
+    await outboxRelay.pollOnce();
+
+    const [row] = await db.select().from(outboxEvents).where(eq(outboxEvents.id, event.id));
+    const storedPayload = row?.payload as { payload: Record<string, unknown> };
+    expect(storedPayload.payload).toEqual({ note: "no secret here", token: "not-actually-secret-for-this-type" });
+  });
 });

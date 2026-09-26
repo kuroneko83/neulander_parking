@@ -86,6 +86,28 @@ export const envSchema = z.object({
   // caracteres para que realmente contribua entropia ao input do Argon2 (`min(1)` deixaria
   // passar algo como "x", que não pepper nada de verdade).
   PASSWORD_PEPPER: z.string().min(32, "PASSWORD_PEPPER precisa ter ao menos 32 caracteres"),
+
+  // --- Convite de membros / e-mail (ADR-0013, ULTRAPLAN 1.5) ---
+  // Base do painel web usada para montar o link de aceite de convite
+  // (`${WEB_APP_URL}/accept-invite/:token}`) — nunca hardcoded no template
+  // (modules/notifications/domain/templates/member-invite.ts).
+  WEB_APP_URL: z
+    .string()
+    .regex(/^https?:\/\//, "WEB_APP_URL precisa começar com http:// ou https://")
+    .default("http://localhost:5173"),
+  // `SmtpEmailChannel` (nodemailer) lê `SMTP_URL`; se ausente, cai para `SMTP_DEV_URL`
+  // (Mailpit local, .env.example) — ver AppConfigService.smtpUrl. Nenhum dos dois é
+  // obrigatório: um `.env` recém-clonado (Fase 0/1) já sobe com o Mailpit do
+  // infra/docker/compose.yml e o default de SMTP_DEV_URL aponta pra ele.
+  SMTP_URL: z
+    .string()
+    .regex(/^smtps?:\/\//, "SMTP_URL precisa começar com smtp:// ou smtps://")
+    .optional(),
+  SMTP_DEV_URL: z
+    .string()
+    .regex(/^smtps?:\/\//, "SMTP_DEV_URL precisa começar com smtp:// ou smtps://")
+    .default("smtp://localhost:1025"),
+  EMAIL_FROM: z.email().default("relatorios@neulander-parking.example.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;

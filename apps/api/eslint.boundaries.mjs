@@ -208,6 +208,51 @@ export default [
               },
             },
             {
+              // `modules/identity/domain/invitation-errors.ts` (ULTRAPLAN 1.5) estende
+              // `DomainError` — mesma exceção nomeada, pelo mesmo motivo, de
+              // `auth-errors.ts` logo acima (evitar que o teste de unidade puro deste
+              // arquivo, `invitation-errors.test.ts`, precise de `.env` carregado).
+              from: {
+                element: {
+                  type: "module-layer",
+                  captured: { module: "identity", layer: "domain" },
+                  fileInternalPath: "invitation-errors.ts",
+                },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: "module-layer",
+                    captured: { module: "shared", layer: "domain" },
+                    fileInternalPath: "domain-error.ts",
+                  },
+                },
+              },
+            },
+            {
+              // `modules/notifications/domain/templates/member-invite.ts` (ULTRAPLAN 1.5,
+              // security-review fix) usa `escapeHtml` — mesma exceção nomeada, pelo mesmo
+              // motivo, de `auth-errors.ts`/`invitation-errors.ts` acima (evitar que o
+              // teste de unidade puro deste arquivo, `member-invite.test.ts`, precise de
+              // `.env` carregado).
+              from: {
+                element: {
+                  type: "module-layer",
+                  captured: { module: "notifications", layer: "domain" },
+                  fileInternalPath: "templates/member-invite.ts",
+                },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: "module-layer",
+                    captured: { module: "shared", layer: "domain" },
+                    fileInternalPath: "escape-html.ts",
+                  },
+                },
+              },
+            },
+            {
               // `problem-details.exception-filter.ts` importa `DomainError` do arquivo puro
               // em vez do barril de propósito: o barril também exporta `SharedModule`, que
               // avaliaria `AppConfigModule`/`DatabaseModule` (leem `process.env`/abrem pool

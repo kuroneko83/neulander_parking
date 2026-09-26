@@ -9,7 +9,9 @@
 export { type Clock, FakeClock } from "./domain/clock";
 export { DomainError } from "./domain/domain-error";
 export type { DomainEvent } from "./domain/domain-event";
+export { escapeHtml } from "./domain/escape-html";
 export { newId } from "./domain/id";
+export { maskEmail } from "./domain/mask-email";
 export { maskPlate, normalizePlate } from "./domain/plate";
 
 // Note: `Cents`/`toCents`/etc. moved to `@neulander/contracts` (ULTRAPLAN 0.6) — it's a
@@ -24,6 +26,8 @@ export { maskPlate, normalizePlate } from "./domain/plate";
 // em tabela de outro"). `apps/api/src/database/schema.ts` still re-exports them directly
 // from `infra/schema.ts` (bypassing this `index.ts`), but that barrel exists purely for
 // `drizzle-kit` tooling, not for application code to import from.
+export { DomainEventBus, type DomainEventHandler } from "./infra/domain-events.bus";
+export { DomainEventsProcessor } from "./infra/domain-events.processor";
 export { IdempotencyInterceptor } from "./infra/idempotency.interceptor";
 export { OutboxService } from "./infra/outbox.service";
 export { DOMAIN_EVENTS_QUEUE, OutboxRelayProcessor } from "./infra/outbox-relay.processor";

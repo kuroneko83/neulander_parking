@@ -4,6 +4,8 @@ import { Global, Module } from "@nestjs/common";
 import { AppConfigModule } from "../../config/app-config.module";
 import { AppConfigService } from "../../config/app-config.service";
 import { DatabaseModule } from "../../database/database.module";
+import { DomainEventBus } from "./infra/domain-events.bus";
+import { DomainEventsProcessor } from "./infra/domain-events.processor";
 import { IdempotencyInterceptor } from "./infra/idempotency.interceptor";
 import { OutboxService } from "./infra/outbox.service";
 import { DOMAIN_EVENTS_QUEUE, OutboxRelayProcessor } from "./infra/outbox-relay.processor";
@@ -44,7 +46,17 @@ import { CLOCK, SystemClock } from "./infra/system-clock";
     OutboxService,
     OutboxRelayProcessor,
     IdempotencyInterceptor,
+    DomainEventBus,
+    DomainEventsProcessor,
   ],
-  exports: [CLOCK, OutboxService, OutboxRelayProcessor, IdempotencyInterceptor, BullModule],
+  exports: [
+    CLOCK,
+    OutboxService,
+    OutboxRelayProcessor,
+    IdempotencyInterceptor,
+    BullModule,
+    DomainEventBus,
+    DomainEventsProcessor,
+  ],
 })
 export class SharedModule {}

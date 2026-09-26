@@ -7,6 +7,7 @@ import type { Options as PinoHttpOptions } from "pino-http";
 
 import { AppConfigModule } from "../config/app-config.module";
 import { AppConfigService } from "../config/app-config.service";
+import { type SerializableRequest, serializeRequestWithRedactedTokens } from "./redact-opaque-tokens";
 
 const REQUEST_ID_HEADER = "x-request-id";
 
@@ -45,6 +46,13 @@ const REQUEST_ID_HEADER = "x-request-id";
               'res.headers["set-cookie"]',
             ],
             censor: "[REDACTED]",
+          },
+          // Security-review fix (ULTRAPLAN 1.5): without this, the live invitation accept
+          // token (`GET /v1/invitations/:token`, `POST /v1/invitations/:token/accept`) was
+          // logged in the clear on every request — see `redact-opaque-tokens.ts`'s own doc
+          // comment for why a path-based `redact.paths` entry can't fix this here.
+          serializers: {
+            req: (req: SerializableRequest) => serializeRequestWithRedactedTokens(req),
           },
           // `exactOptionalPropertyTypes`: only set `transport` at all outside production
           // (pino-pretty is a dev-only dependency of readability, not a real transport

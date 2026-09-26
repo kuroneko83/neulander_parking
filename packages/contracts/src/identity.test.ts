@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
 import {
+  AcceptInvitationInputSchema,
+  CreateInvitationInputSchema,
   GlobalRoleSchema,
+  InvitationPreviewSchema,
+  InvitationViewSchema,
   LoginInputSchema,
+  MemberInvitedPayloadSchema,
   MembershipSchema,
   MeSchema,
   OrganizationRoleSchema,
@@ -256,5 +261,163 @@ describe("OrganizationRoleSchema", () => {
 
   it("rejects an arbitrary value", () => {
     expect(() => OrganizationRoleSchema.parse("driver")).toThrow(ZodError);
+  });
+});
+
+describe("CreateInvitationInputSchema", () => {
+  function validInput() {
+    return { email: "novo.membro@example.com", role: "manager" as const };
+  }
+
+  it("accepts a valid input, defaulting parkingLotIds to an empty array", () => {
+    expect(CreateInvitationInputSchema.parse(validInput())).toEqual({
+      ...validInput(),
+      parkingLotIds: [],
+    });
+  });
+
+  it("accepts an explicit empty parkingLotIds", () => {
+    const input = { ...validInput(), parkingLotIds: [] };
+    expect(CreateInvitationInputSchema.parse(input)).toEqual(input);
+  });
+
+  it("accepts (schema-level) a non-empty parkingLotIds — the use case rejects it, not this schema", () => {
+    const input = { ...validInput(), parkingLotIds: ["01933b6a-1a00-7000-8000-000000000001"] };
+    expect(() => CreateInvitationInputSchema.parse(input)).not.toThrow();
+  });
+
+  it("rejects an invalid email", () => {
+    expect(() => CreateInvitationInputSchema.parse({ ...validInput(), email: "not-an-email" })).toThrow(
+      ZodError,
+    );
+  });
+
+  it("rejects a role outside the organization-role enum", () => {
+    expect(() => CreateInvitationInputSchema.parse({ ...validInput(), role: "driver" })).toThrow(
+      ZodError,
+    );
+  });
+
+  it("rejects a malformed uuid inside parkingLotIds", () => {
+    expect(() =>
+      CreateInvitationInputSchema.parse({ ...validInput(), parkingLotIds: ["not-a-uuid"] }),
+    ).toThrow(ZodError);
+  });
+});
+
+describe("InvitationViewSchema", () => {
+  function validView() {
+    return {
+      id: "01933b6a-1a00-7000-8000-000000000001",
+      organizationId: "01933b6a-1a00-7000-8000-000000000002",
+      email: "novo.membro@example.com",
+      role: "operator" as const,
+      parkingLotIds: [] as string[],
+      expiresAt: new Date("2026-10-03T12:00:00.000Z"),
+      createdAt: new Date("2026-09-26T12:00:00.000Z"),
+    };
+  }
+
+  it("accepts a valid invitation view and never has a token/tokenHash field", () => {
+    const parsed = InvitationViewSchema.parse(validView());
+    expect(parsed).toEqual(validView());
+    expect("token" in parsed).toBe(false);
+    expect("tokenHash" in parsed).toBe(false);
+  });
+
+  it.each(["id", "organizationId", "email", "role", "parkingLotIds", "expiresAt", "createdAt"] as const)(
+    "rejects when required field %s is missing",
+    (field) => {
+      const { [field]: _omitted, ...rest } = validView();
+      expect(() => InvitationViewSchema.parse(rest)).toThrow(ZodError);
+    },
+  );
+});
+
+describe("InvitationPreviewSchema", () => {
+  function validPreview() {
+    return {
+      organizationName: "Estacionamento Demo",
+      role: "operator" as const,
+      email: "convidado@example.com",
+      expiresAt: new Date("2026-10-03T12:00:00.000Z"),
+      userExists: false,
+    };
+  }
+
+  it("accepts a valid preview", () => {
+    expect(InvitationPreviewSchema.parse(validPreview())).toEqual(validPreview());
+  });
+
+  it("accepts userExists as true (existing account)", () => {
+    expect(() => InvitationPreviewSchema.parse({ ...validPreview(), userExists: true })).not.toThrow();
+  });
+
+  it("rejects a role outside the organization-role enum", () => {
+    expect(() => InvitationPreviewSchema.parse({ ...validPreview(), role: "platform_admin" })).toThrow(
+      ZodError,
+    );
+  });
+});
+
+describe("AcceptInvitationInputSchema", () => {
+  it("accepts an empty body (existing-account branch)", () => {
+    expect(AcceptInvitationInputSchema.parse({})).toEqual({});
+  });
+
+  it("accepts a valid { name, password } (new-account branch)", () => {
+    const input = { name: "Ana Souza", password: "correct-horse" };
+    expect(AcceptInvitationInputSchema.parse(input)).toEqual(input);
+  });
+
+  it("rejects a password shorter than 8 characters when provided", () => {
+    expect(() =>
+      AcceptInvitationInputSchema.parse({ name: "Ana Souza", password: "short" }),
+    ).toThrow(ZodError);
+  });
+
+  it("rejects a name shorter than 2 characters when provided", () => {
+    expect(() =>
+      AcceptInvitationInputSchema.parse({ name: "A", password: "correct-horse" }),
+    ).toThrow(ZodError);
+  });
+});
+
+describe("MemberInvitedPayloadSchema", () => {
+  function validPayload() {
+    return {
+      invitationId: "01933b6a-1a00-7000-8000-000000000001",
+      organizationId: "01933b6a-1a00-7000-8000-000000000002",
+      organizationName: "Estacionamento Demo",
+      email: "convidado@example.com",
+      role: "manager" as const,
+      invitedByUserId: "01933b6a-1a00-7000-8000-000000000003",
+      token: "a-opaque-plaintext-token",
+      expiresAt: "2026-10-03T12:00:00.000Z",
+    };
+  }
+
+  it("accepts a valid payload with expiresAt as an ISO STRING (not a Date instance)", () => {
+    expect(MemberInvitedPayloadSchema.parse(validPayload())).toEqual(validPayload());
+  });
+
+  it("rejects expiresAt as a Date instance — this payload only ever round-trips as a string", () => {
+    expect(() =>
+      MemberInvitedPayloadSchema.parse({ ...validPayload(), expiresAt: new Date() }),
+    ).toThrow(ZodError);
+  });
+
+  it.each([
+    "invitationId",
+    "organizationId",
+    "organizationName",
+    "email",
+    "role",
+    "invitedByUserId",
+    "token",
+    "expiresAt",
+  ] as const)("rejects when required field %s is missing", (field) => {
+    const { [field]: _omitted, ...rest } = validPayload();
+    expect(() => MemberInvitedPayloadSchema.parse(rest)).toThrow(ZodError);
   });
 });

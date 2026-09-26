@@ -8,6 +8,7 @@ import { AppConfigModule } from "./config/app-config.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
 import { IdentityModule } from "./modules/identity";
+import { NotificationsModule } from "./modules/notifications";
 import { SharedModule } from "./modules/shared";
 
 /**
@@ -31,6 +32,7 @@ import { SharedModule } from "./modules/shared";
     SharedModule,
     HealthModule,
     IdentityModule,
+    NotificationsModule,
   ],
   providers: [
     // Every future controller DTO is a Zod schema (`nestjs-zod`, see

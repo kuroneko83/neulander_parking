@@ -7,7 +7,7 @@ import { CLOCK, type Clock, newId } from "../../shared";
 import type { AccessTokenClaims } from "../domain/access-token-claims";
 import { InvalidCredentialsError } from "../domain/auth-errors";
 import { addDays } from "../domain/dates";
-import { generateOpaqueRefreshToken, hashOpaqueToken } from "../domain/refresh-token-crypto";
+import { generateOpaqueToken, hashOpaqueToken } from "../domain/opaque-token";
 import {
   ACCESS_TOKEN_SERVICE,
   type AccessTokenServicePort,
@@ -76,7 +76,7 @@ export class LoginUseCase {
     const accessToken = this.accessTokenService.sign(claims);
 
     const now = this.clock.now();
-    const refreshToken = generateOpaqueRefreshToken();
+    const refreshToken = generateOpaqueToken();
     // A single insert needs no explicit `db.transaction()` — Postgres already commits one
     // statement atomically; nothing else needs to happen alongside it (login isn't a
     // documented outbox-event source, unlike registration).
