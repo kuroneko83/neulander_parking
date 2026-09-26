@@ -49,7 +49,7 @@ erDiagram
 | `users` | id, email (citext), password_hash, name, phone, cpf_encrypted, role_global (`driver`\|`platform_admin`\|null), email_verified_at, deleted_at | unique(email) |
 | `organizations` | id, name, legal_name, cnpj, status (`active`\|`suspended`) | unique(cnpj) |
 | `memberships` | id, organization_id, user_id, role (`owner`\|`manager`\|`operator`), parking_lot_ids uuid[] (escopo do operador; vazio = todos) | unique(organization_id, user_id) |
-| `refresh_tokens` | id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by | index(user_id), unique(token_hash) |
+| `refresh_tokens` | id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by | index(user_id), index(family_id), unique(token_hash) |
 
 ### facilities
 | Tabela | Colunas principais | Índices / restrições |
