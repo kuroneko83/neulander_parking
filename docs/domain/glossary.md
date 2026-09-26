@@ -28,6 +28,8 @@
 | Gestor | `manager` | Configura estacionamento, preços, mensalistas; vê relatórios |
 | Proprietário | `owner` | Gestor com poder sobre membros e dados da organização |
 | Motorista | `driver` | Usuário do app mobile |
+| Convite | `Invitation` / `invitations` | Convite de membro para uma organização, enviado por e-mail com token de aceite (expira em 7 dias) |
+| Aceitar convite | `AcceptInvitation` | Caso de uso do convidado: cria conta (se não existir) + membership no papel convidado |
 | Cancela | `Device` (`kind = gate`) | Barreira física de entrada/saída (Fase 12) |
 | Leitura de placa (LPR/OCR) | `PlateRead` | Uma passagem de veículo reconhecida pela câmera: placa, horário, direção, confiança |
 | Câmera / Dispositivo | `Device` | Câmera cadastrada no estacionamento, com sua chave de acesso |

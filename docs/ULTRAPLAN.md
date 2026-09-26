@@ -7,11 +7,22 @@
 ## Estado atual
 
 - **Fase atual:** 1 — Identidade & organizações
-- **Última tarefa concluída:** 1.4 — Guards `JwtAuthGuard`/`@Roles()`/`OrgScopeGuard` (`a21329e`, docs em
-  `a02d254`) — code-reviewer aprovou, security-reviewer deu PASS. Push feito, CI verde
-  (run `36236722651`).
-- **Próximo passo (rodar `/next-task` sem argumento pega isto automaticamente):** tarefa **1.5** — "Convite de
-  membros (e-mail via Mailpit com token de aceite)", `backend-engineer`. Nada foi começado ainda.
+- **Última tarefa concluída:** 1.5 — Convite de membros por e-mail (`1469116`) — novo módulo `notifications`
+  (porta `MessagingChannel`, `SmtpEmailChannel`→Mailpit, `FakeChannel` em teste), despachante genérico de eventos
+  de domínio via outbox→BullMQ (`DomainEventBus`/`DomainEventsProcessor`, ADR-0017 — primeiro consumidor real da
+  fila), tabela `invitations`, `InviteMemberUseCase`/`GetInvitationUseCase`/`AcceptInvitationUseCase`. Passou por
+  duas rodadas de `code-reviewer`/`security-reviewer` (1ª rodada: BLOCK/changes-requested por token vazando em
+  log via URL, token de aceite persistido em claro em `outbox_events`, violação de unique não traduzida, HTML
+  não escapado no e-mail, worker travando no shutdown — todos corrigidos; 2ª rodada: APPROVE/PASS, com dois
+  achados novos e menores também corrigidos — IP do cliente some do log por bug no serializer, e erro genérico
+  do Postgres ainda vazava parâmetros de bind em 500 fora do caso de violação de unicidade). Gap conhecido e
+  deliberadamente adiado: convite não pode ser revogado e papel de quem convidou não é revalidado no aceite —
+  ver nota na tarefa 1.5 e pré-requisito anotado na 1.8. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
+  verdes localmente; **não foi feito push ainda**.
+- **Próximo passo (rodar `/next-task` sem argumento pega isto automaticamente):** tarefa **1.6** — "Rate limit em
+  login/registro (Redis)", `backend-engineer`. Ao pegar essa tarefa, incluir `/v1/invitations/*` no escopo do
+  rate limit (nota da revisão de segurança da 1.5: `POST /v1/invitations/:token/accept` é rota pública que chega
+  a um hash argon2id). Nada foi começado ainda.
 - **Estado do ambiente local no fim desta sessão (2026-09-26):** `docker compose` (postgres/redis/mailpit/
   localstack) e os dois dev servers (`api` na porta 3333, `web` na 5173) estavam todos rodando e saudáveis —
   mas eram processos desta sessão de terminal; se não estiverem mais no ar na próxima sessão, suba de novo com
@@ -76,11 +87,22 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [x] **1.2** Schema `users`, `organizations`, `memberships`, `refresh_tokens` + seed (platform_admin, org demo, gestor, operador, motorista) — `database-engineer` (`1923887`)
 - [x] **1.3** Registro/login com argon2id, JWT RS256 (15 min), refresh rotativo com detecção de reuso (revoga família) — `backend-engineer` (`628325d`)
 - [x] **1.4** Guards: `JwtAuthGuard`, `@Roles()`, `OrgScopeGuard` (valida `:orgId` ∈ memberships; operador limitado a `parking_lot_ids`) — `backend-engineer` (`a21329e`)
-- [ ] **1.5** Convite de membros (e-mail via Mailpit com token de aceite) — `backend-engineer`
+- [x] **1.5** Convite de membros (e-mail via Mailpit com token de aceite) — `backend-engineer` (`1469116`)
+  - **Gap conhecido, encontrado na revisão de segurança (deliberadamente fora do escopo de
+    1.5, não implementar antes de 1.8 revisar):** convite emitido não pode ser revogado
+    (`invitations.revoked_at` existe na tabela mas nada escreve nele — nenhum endpoint de
+    revogação foi construído), e `AcceptInvitationUseCase` não revalida o papel/pertencimento
+    de quem convidou no momento do aceite — um convite digitado errado/vazado continua
+    resgatável pelos 7 dias inteiros do TTL, e o convite de um gestor já rebaixado/removido
+    continua sendo honrado. Antes de 1.8 dar o sinal verde da fase: ou construir um endpoint
+    de revogação (`POST /v1/orgs/:orgId/invitations/:id/revoke` ou similar) como
+    pré-requisito de 1.7/1.8, ou registrar aqui uma decisão explícita de aceitar o risco.
 - [ ] **1.6** Rate limit em login/registro (Redis) — `backend-engineer`
 - [ ] **1.7** Web: telas login, aceite de convite, seletor de organização, rotas protegidas por papel, refresh silencioso — `web-engineer`
 - [ ] **1.8** Revisão de segurança da fase — `security-reviewer`
   - Aceite da fase: e2e Playwright "gestor faz login → convida operador → operador aceita e só vê seu lot".
+  - Fechar (ou aceitar formalmente) o gap de revogação de convite anotado na tarefa 1.5 antes
+    de aprovar a fase.
 
 ## Fase 2 — Estacionamentos & vagas
 

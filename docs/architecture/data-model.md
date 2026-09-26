@@ -50,6 +50,7 @@ erDiagram
 | `organizations` | id, name, legal_name, cnpj, status (`active`\|`suspended`) | unique(cnpj) |
 | `memberships` | id, organization_id, user_id, role (`owner`\|`manager`\|`operator`), parking_lot_ids uuid[] (escopo do operador; vazio = todos) | unique(organization_id, user_id) |
 | `refresh_tokens` | id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by | index(user_id), index(family_id), unique(token_hash) |
+| `invitations` | id, organization_id, email (citext), role (`owner`\|`manager`\|`operator`), parking_lot_ids uuid[], token_hash (sha256 do token opaco — nunca o token), invited_by_user_id, expires_at (7 dias), accepted_at, accepted_by_user_id, revoked_at | unique(token_hash), unique parcial(organization_id, email) `where accepted_at is null and revoked_at is null` (um convite pendente por e-mail/org), index(organization_id) |
 
 ### facilities
 | Tabela | Colunas principais | Índices / restrições |

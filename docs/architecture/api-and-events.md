@@ -22,7 +22,9 @@
 | POST | `/v1/auth/logout` | autenticado | Revoga família de refresh |
 | GET | `/v1/me` | autenticado | Perfil + memberships |
 | POST | `/v1/orgs` | platform_admin | Cria organização + owner |
-| POST | `/v1/orgs/:orgId/members` | owner, manager | Convida operador/gestor |
+| POST | `/v1/orgs/:orgId/members` | owner, manager | Convida operador/gestor por e-mail (token de aceite); `manager` não pode convidar `owner`. Resposta **nunca** devolve o token |
+| GET | `/v1/invitations/:token` | público (portador do token) | Dados para a tela de aceite: `{ organizationName, role, email, expiresAt, userExists }` |
+| POST | `/v1/invitations/:token/accept` | público (portador do token) | Sem conta no e-mail convidado: body `{ name, password }` → cria usuário + membership → `201` + `TokenPair`. Com conta existente: body vazio → cria só a membership → `204` (web manda logar). Replay do mesmo token com membership já criada → `204` |
 
 ### Facilities
 | Método | Rota | Quem |
@@ -122,10 +124,12 @@ Payloads definidos em `packages/contracts/src/realtime`.
 ## Eventos de domínio (outbox → BullMQ)
 
 Envelope: `{ id, type, version, occurredAt, aggregateId, organizationId, payload }`. Handlers **idempotentes** (dedupe por `id`).
+Consumo: um único despachante da fila `domain-events` roteia por `type` para os handlers registrados (ADR-0017).
 
 | Evento | Produtor | Consumidores |
 |---|---|---|
 | `identity.user_registered.v1` | identity | notifications (boas-vindas) |
+| `identity.member_invited.v1` | identity | notifications (e-mail de convite) |
 | `facilities.spot_status_changed.v1` | facilities | occupancy |
 | `sessions.session_started.v1` | sessions | occupancy, facilities (marca vaga ocupada), notifications |
 | `sessions.session_paid.v1` | sessions | occupancy (realtime), notifications (recibo) |

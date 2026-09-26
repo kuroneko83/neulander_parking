@@ -127,7 +127,7 @@ Monólito modular; cada módulo é um *bounded context* com fronteira forçada p
 
 | Módulo | Responsabilidade | Principais agregados | Publica eventos |
 |---|---|---|---|
-| `identity` | Cadastro, login, JWT/refresh, RBAC, organizações, membros | `User`, `Organization`, `Membership` | `UserRegistered` |
+| `identity` | Cadastro, login, JWT/refresh, RBAC, organizações, membros, convites | `User`, `Organization`, `Membership`, `Invitation` | `UserRegistered`, `MemberInvited` |
 | `facilities` | Estacionamentos, setores (zonas), vagas, horários, geolocalização | `ParkingLot`, `Zone`, `Spot` | `LotPublished`, `SpotStatusChanged` |
 | `pricing` | Tabelas de preço versionadas; delega cálculo a `packages/pricing` | `RatePlan` | `RatePlanActivated` |
 | `sessions` | Ciclo de vida da permanência (entrada → pagamento → saída), tickets QR | `ParkingSession` | `SessionStarted`, `SessionPaid`, `SessionClosed` |
@@ -136,7 +136,7 @@ Monólito modular; cada módulo é um *bounded context* com fronteira forçada p
 | `subscriptions` | Mensalistas: planos, contratos, cobrança recorrente, placas autorizadas | `SubscriptionPlan`, `Subscription` | `SubscriptionActivated`, `SubscriptionPastDue` |
 | `lpr` | Câmeras/agentes de borda (cadastro, chave, heartbeat, config), ingestão de leituras, pareamento entrada↔saída, fila de revisão | `Device`, `PlateRead` | `PlateReadReceived`, `PlateReadMatched`, `ReviewRequired`, `DeviceOffline` |
 | `occupancy` | Contadores em tempo real, gateway WebSocket, cache de disponibilidade | (read model) | — consome eventos |
-| `notifications` | E-mail (SES), WhatsApp (Cloud API da Meta, ADR-0013), push, templates, opt-in e status de entrega | `Notification`, `ReportRecipient` | — consome eventos |
+| `notifications` | E-mail (porta `MessagingChannel`, ADR-0013: `SmtpEmailChannel` para Mailpit em dev, `SesEmailChannel` em produção, `FakeChannel` em teste), WhatsApp (Cloud API da Meta), push, templates, opt-in e status de entrega | `Notification`, `ReportRecipient` | — consome eventos |
 | `reporting` | **Relatório diário por estacionamento** (fechamento, PDF/CSV, envio por e-mail e WhatsApp), read models de faturamento/ocupação, exports | `DailyReport` + projeções | `DailyReportReady` |
 | `shared` (kernel) | `DomainError`, `Clock`, `Money/Cents`, outbox, idempotência, auditoria | — | — |
 
@@ -155,7 +155,7 @@ apps/api/src/modules/sessions/
 
 ### Comunicação entre módulos
 - **Síncrona** (consulta necessária na mesma transação): via serviço exportado no `index.ts` (ex.: `sessions` chama `pricing.quote()`).
-- **Assíncrona** (efeitos colaterais): evento gravado em `outbox_events` na mesma transação → relay publica em BullMQ → handlers idempotentes (ADR-0007).
+- **Assíncrona** (efeitos colaterais): evento gravado em `outbox_events` na mesma transação → relay publica em BullMQ → handlers idempotentes (ADR-0007). Um único despachante consome a fila `domain-events` e roteia por `type` para os handlers que cada módulo registra (ADR-0017); envio de e-mail/WhatsApp **só** por esse caminho — nenhum módulo injeta o canal de mensagens de `notifications` direto.
 
 ## 7. Decisões-chave de design
 
