@@ -22,7 +22,8 @@
     "test:int": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["DATABASE_URL", "REDIS_URL", "NODE_ENV"]
     },
     "dev": {
       "cache": false,
