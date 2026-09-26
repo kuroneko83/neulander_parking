@@ -7,22 +7,31 @@ import { ProblemDetailsExceptionFilter } from "./common/problem-details.exceptio
 import { AppConfigModule } from "./config/app-config.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
+import { IdentityModule } from "./modules/identity";
 import { SharedModule } from "./modules/shared";
 
 /**
- * Root module (ULTRAPLAN 0.3/0.4/0.5, `shared` kernel added). No domain modules yet (`modules/<ctx>` — identity,
- * facilities, sessions, ... — start in Phase 1+); this is only the bootstrap skeleton
- * shared by both entrypoints (main.ts / main.worker.ts, see docs/adr/0001), plus the
- * shared Drizzle/Postgres client (DatabaseModule) they'll inject into, plus the `shared`
- * kernel (`SharedModule` — Clock, OutboxService, BullMQ) every future domain module
- * builds on.
+ * Root module (ULTRAPLAN 0.3/0.4/0.5, `shared` kernel added; ULTRAPLAN 1.2 adds the first
+ * domain module, `identity`). This is the bootstrap skeleton shared by both entrypoints
+ * (main.ts / main.worker.ts, see docs/adr/0001), plus the shared Drizzle/Postgres client
+ * (DatabaseModule) they'll inject into, plus the `shared` kernel (`SharedModule` — Clock,
+ * OutboxService, BullMQ) every domain module builds on. Future domain modules
+ * (`facilities`, `sessions`, ... — Phase 2+) each add their own import line here as they
+ * land, same as `IdentityModule` does now.
  *
  * `SharedModule` registers `OutboxRelayProcessor` as a provider in both entrypoints, but
  * its polling only ever starts when `main.worker.ts` explicitly calls `.start()` after
  * bootstrap completes — see that file and the processor's own doc comment for why.
  */
 @Module({
-  imports: [AppConfigModule, LoggingModule, DatabaseModule, SharedModule, HealthModule],
+  imports: [
+    AppConfigModule,
+    LoggingModule,
+    DatabaseModule,
+    SharedModule,
+    HealthModule,
+    IdentityModule,
+  ],
   providers: [
     // Every future controller DTO is a Zod schema (`nestjs-zod`, see
     // docs/architecture/api-and-events.md) — validated globally here.

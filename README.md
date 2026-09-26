@@ -66,3 +66,25 @@ endpoint local: `aws --endpoint-url=http://localhost:4566 s3 ls s3://neulander-p
 > "License activation failed". Ver ADR-0015.
 
 Os comandos de `apps/api` (`pnpm dev`, migrations etc.) chegam nas tarefas 0.3/0.4 da Fase 0.
+
+## Seed de dados de demonstração
+
+```bash
+pnpm --filter api db:migrate   # cria as tabelas (se ainda não existirem)
+pnpm --filter api db:seed      # idempotente: rodar de novo não duplica linhas
+```
+
+Semeia (ULTRAPLAN 1.2): 1 `platform_admin`, a organização demo **"Estacionamento Demo"** com um
+membro `owner`, um `manager` (gestor) e um `operator` (operador) — três usuários distintos, cada um
+com um único papel — e 1 `driver` (motorista) avulso, sem organização.
+
+| Papel | E-mail |
+|---|---|
+| `platform_admin` | `admin@neulander.dev` |
+| `owner` (dono) | `dono@estacionamento-demo.neulander.dev` |
+| `manager` (gestor) | `gestor@estacionamento-demo.neulander.dev` |
+| `operator` (operador) | `operador@estacionamento-demo.neulander.dev` |
+| `driver` (motorista) | `motorista@neulander.dev` |
+
+Senha de todas as contas acima: **`senha123`** — hash real argon2id (não é um placeholder;
+login/JWT chegam na tarefa 1.3, mas o hash já é utilizável assim que o login existir).

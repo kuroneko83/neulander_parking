@@ -15,6 +15,13 @@
       "when": 1790338228182,
       "tag": "0001_foamy_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790392175602,
+      "tag": "0002_strong_gateway",
+      "breakpoints": true
     }
   ]
 }

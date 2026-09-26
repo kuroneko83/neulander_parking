@@ -9,7 +9,8 @@
  * from it — it goes through each module's own public `index.ts` instead (CLAUDE.md rule
  * 1), same as `modules/shared/index.ts` documents for its own `infra/schema.ts`.
  *
- * `modules/identity`, `modules/facilities`, ... add their own re-export line here as they
- * land (Phase 1+ — see docs/ULTRAPLAN.md). Never define tables directly in this file.
+ * `modules/facilities`, `modules/sessions`, ... add their own re-export line here as they
+ * land (Phase 2+ — see docs/ULTRAPLAN.md). Never define tables directly in this file.
  */
+export * from "../modules/identity/infra/schema";
 export * from "../modules/shared/infra/schema";
