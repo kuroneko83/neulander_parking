@@ -6,11 +6,15 @@
 
 ## Estado atual
 
-- **Fase atual:** 0 — Fundação
-- **Última tarefa concluída:** 0.9 — GitHub Actions CI, PR template, Dependabot (`b248000`)
+- **Fase atual:** 1 — Identidade & organizações
+- **Última tarefa concluída:** 0.9 — GitHub Actions CI, PR template, Dependabot; CI verde de verdade no GitHub
+  após corrigir `turbo.json` (`2c177e4`) — **Fase 0 completa.**
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
-  já haver outros projetos nesta máquina de dev ocupando essas portas.
+  já haver outros projetos nesta máquina de dev ocupando essas portas. `git push` nesta máquina precisa contornar
+  o credential helper `osxkeychain` (trava esperando autorização gráfica) com
+  `git -c credential.helper= -c credential.helper='!gh auth git-credential' push ...` — nunca editar o git config
+  global pra "consertar" isso.
 - **Escopo do protótipo (2026-09-25):** alvo até **M3 (Fases 0–7)** — automação do controle de entrada/saída e
   operação do dia a dia para o **dono do estacionamento**, sem app para clientes/motoristas por enquanto. Fases 8
   e 9 ficam só como estrutura/contratos (ver notas nos cabeçalhos de cada fase abaixo). Ver `CLAUDE.md`.
