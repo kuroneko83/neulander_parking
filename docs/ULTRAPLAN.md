@@ -7,8 +7,7 @@
 ## Estado atual
 
 - **Fase atual:** 1 — Identidade & organizações
-- **Última tarefa concluída:** 1.3 — Registro/login com argon2id, JWT RS256, refresh rotativo com detecção de
-  reuso (`628325d`)
+- **Última tarefa concluída:** 1.4 — Guards `JwtAuthGuard`/`@Roles()`/`OrgScopeGuard` (`a21329e`)
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas. `git push` nesta máquina precisa contornar
@@ -62,7 +61,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 - [x] **1.1** Contracts: `RegisterInput`, `LoginInput`, `TokenPair`, `Me`, `Role` — `backend-engineer` (`f346e9a`)
 - [x] **1.2** Schema `users`, `organizations`, `memberships`, `refresh_tokens` + seed (platform_admin, org demo, gestor, operador, motorista) — `database-engineer` (`1923887`)
 - [x] **1.3** Registro/login com argon2id, JWT RS256 (15 min), refresh rotativo com detecção de reuso (revoga família) — `backend-engineer` (`628325d`)
-- [ ] **1.4** Guards: `JwtAuthGuard`, `@Roles()`, `OrgScopeGuard` (valida `:orgId` ∈ memberships; operador limitado a `parking_lot_ids`) — `backend-engineer`
+- [x] **1.4** Guards: `JwtAuthGuard`, `@Roles()`, `OrgScopeGuard` (valida `:orgId` ∈ memberships; operador limitado a `parking_lot_ids`) — `backend-engineer` (`a21329e`)
 - [ ] **1.5** Convite de membros (e-mail via Mailpit com token de aceite) — `backend-engineer`
 - [ ] **1.6** Rate limit em login/registro (Redis) — `backend-engineer`
 - [ ] **1.7** Web: telas login, aceite de convite, seletor de organização, rotas protegidas por papel, refresh silencioso — `web-engineer`
@@ -73,6 +72,16 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
 
 - [ ] **2.1** Contracts + schema `parking_lots` (geography), `zones`, `spots` — `database-engineer`
 - [ ] **2.2** CRUD de lots/zonas, criação de vagas em lote (`A-001..A-120`), publicar/fechar, bloquear vaga — `backend-engineer`
+  - **Pré-requisito (achado da revisão de segurança da tarefa 1.4):** `OrgScopeGuard` só restringe um `operator` ao
+    seu `parking_lot_ids` em rotas cujo path tem um param **literal** `:lotId` — qualquer rota `operator+` que
+    resolva o lot indiretamente (ex.: por `:sessionId`/`:deviceId`/`:readId`) passa pelo guard sem checagem de
+    escopo de lot nenhuma. Antes de expor a primeira rota assim (`PATCH .../spots/:spotId` já é `:lotId`-direta e
+    está OK; futuras rotas de sessão/dispositivo/leitura de placa, Fases 4/5, NÃO estão), resolver com uma destas
+    duas opções: (a) um decorator explícito (`@LotScoped()`) que `OrgScopeGuard` exige e falha fechado se o param
+    declarado não existir na rota; ou (b) mover a checagem de escopo de lot pro use case correspondente, que já
+    resolve o lot a partir do recurso. Além disso, `memberships.parking_lot_ids` não tem FK pra `parking_lots`
+    (não existia até esta tarefa criar a tabela) — qualquer endpoint que passe a escrever nesse campo (convite de
+    membro, edição de membership) deve validar que todo id ali pertence à própria organização antes de gravar.
 - [ ] **2.3** Busca pública `GET /v1/lots/search` com `ST_DWithin`, ordenação por distância, cursor — `database-engineer`
   - Aceite: `EXPLAIN` usa índice GiST; teste com 5 mil lots seed < 50 ms.
 - [ ] **2.4** Web: lista de lots, formulário com endereço + mapa (Leaflet/Mapbox) para posicionar o pin, editor de zonas e grade de vagas (MUI DataGrid) — `web-engineer`

@@ -12,6 +12,12 @@ Access token JWT RS256 (15 min) com `sub`, `roles` globais e lista curta de orgs
 ## Consequências
 - Controle total e zero custo; responsabilidade de segurança é nossa (revisão obrigatória do `security-reviewer`).
 - Login social pode ser adicionado depois (OAuth via passport).
+- **Staleness de até 15 min é aceita, não corrigida:** sem denylist de access token, nenhuma mudança de
+  `role`/`parking_lot_ids`/logout invalida um access token já emitido antes do seu `exp` (ULTRAPLAN 1.4,
+  revisão de segurança). `POST /v1/auth/logout` revoga a família de refresh (a sessão não sobrevive a um
+  próximo `refresh`), mas o bearer atual continua servindo requisições até expirar sozinho — aceitável para
+  este protótipo; se um terminal físico compartilhado (guarita) precisar de logout imediato de verdade, isso
+  exige um `JWT_ACCESS_TTL` bem mais curto ou um denylist, revisitar então.
 
 ## Alternativas consideradas
 - **Auth0/Clerk/Cognito:** rápido, mas custo/lock-in e menos valor demonstrativo. **Keycloak:** operação pesada para o escopo.
