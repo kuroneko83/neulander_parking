@@ -148,7 +148,19 @@ describe("seedIdentity — idempotent against real Postgres", () => {
     const [admin] = await db.select().from(users).where(eq(users.email, "admin@neulander.dev"));
     expect(admin?.passwordHash).toBeDefined();
 
-    await expect(argon2.verify(admin!.passwordHash, DEMO_SEED_PASSWORD)).resolves.toBe(true);
-    await expect(argon2.verify(admin!.passwordHash, "wrong-password")).resolves.toBe(false);
+    // Hashed with `PASSWORD_PEPPER` as argon2's `secret` (ULTRAPLAN 1.3, same mechanism as
+    // `PasswordHasher` — see `infra/seed.ts`'s header comment), so verifying here must pass
+    // that same secret or every seeded account would look locked out. The real end-to-end
+    // guarantee ("a seeded account can actually log in") is asserted via HTTP in
+    // `test/identity/auth.int.test.ts`; this test's job is narrower: confirm the stored hash
+    // is a real, pepper-aware argon2id hash and not a placeholder string.
+    const pepper = process.env["PASSWORD_PEPPER"];
+    if (!pepper) {
+      throw new Error("PASSWORD_PEPPER não definido — carregado via test/setup-int.ts.");
+    }
+    const secret = Buffer.from(pepper, "utf8");
+
+    await expect(argon2.verify(admin!.passwordHash, DEMO_SEED_PASSWORD, { secret })).resolves.toBe(true);
+    await expect(argon2.verify(admin!.passwordHash, "wrong-password", { secret })).resolves.toBe(false);
   });
 });

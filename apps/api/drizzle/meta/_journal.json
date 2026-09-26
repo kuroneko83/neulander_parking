@@ -22,6 +22,13 @@
       "when": 1790392175602,
       "tag": "0002_strong_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790401757851,
+      "tag": "0003_aspiring_nemesis",
+      "breakpoints": true
     }
   ]
 }

@@ -23,7 +23,16 @@
       "dependsOn": ["^build"],
       "outputs": [],
       "cache": false,
-      "passThroughEnv": ["DATABASE_URL", "REDIS_URL", "NODE_ENV"]
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "NODE_ENV",
+        "JWT_ACCESS_PRIVATE_KEY",
+        "JWT_ACCESS_PUBLIC_KEY",
+        "JWT_ACCESS_TTL",
+        "JWT_REFRESH_TTL_DAYS",
+        "PASSWORD_PEPPER"
+      ]
     },
     "dev": {
       "cache": false,

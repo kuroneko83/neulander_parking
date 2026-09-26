@@ -15,6 +15,8 @@ export {
   MeSchema,
   type OrganizationRole,
   OrganizationRoleSchema,
+  type RefreshInput,
+  RefreshInputSchema,
   type RegisterInput,
   RegisterInputSchema,
   type TokenPair,

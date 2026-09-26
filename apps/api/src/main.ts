@@ -20,6 +20,7 @@ import { cleanupOpenApiDoc } from "nestjs-zod";
 
 import { AppModule } from "./app.module";
 import { AppConfigService } from "./config/app-config.service";
+import { applyGlobalHttpConfig } from "./configure-app";
 
 /**
  * HTTP entrypoint (ULTRAPLAN 0.3). Same source/AppModule as the worker
@@ -32,6 +33,10 @@ async function bootstrap(): Promise<void> {
   // Fargate (system-design.md §5/§11), where the ALB stops routing but existing
   // connections need a moment to finish during deploys/scale-in.
   app.enableShutdownHooks();
+
+  // See configure-app.ts's doc comment: the same call is made by any integration test
+  // that builds its own `INestApplication` instead of going through this `bootstrap()`.
+  applyGlobalHttpConfig(app);
 
   const appConfig = app.get(AppConfigService);
   app.enableCors({ origin: appConfig.corsOrigins });

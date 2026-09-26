@@ -10,6 +10,13 @@ const validEnv = {
   LOG_LEVEL: "info",
   DATABASE_URL: "postgresql://neulander:neulander@localhost:5433/neulander_parking",
   REDIS_URL: "redis://localhost:6379",
+  // Fake but correctly-shaped PEM blocks — this schema only checks the markers, never
+  // parses real RSA key material (that's `jsonwebtoken`'s job at sign/verify time).
+  JWT_ACCESS_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----",
+  JWT_ACCESS_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nFAKE\n-----END PUBLIC KEY-----",
+  JWT_ACCESS_TTL: "15m",
+  JWT_REFRESH_TTL_DAYS: "30",
+  PASSWORD_PEPPER: "test-pepper-at-least-32-characters-long",
 };
 
 describe("validateEnv", () => {
@@ -65,7 +72,13 @@ describe("validateEnv", () => {
     expect(env.DATABASE_POOL_MAX).toBe(10);
   });
 
-  const requiredVars: (keyof typeof validEnv)[] = ["DATABASE_URL", "REDIS_URL"];
+  const requiredVars: (keyof typeof validEnv)[] = [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_ACCESS_PRIVATE_KEY",
+    "JWT_ACCESS_PUBLIC_KEY",
+    "PASSWORD_PEPPER",
+  ];
 
   it.each(requiredVars)("throws a clear error when %s is missing", (key) => {
     const { [key]: _omitted, ...rest } = validEnv;
@@ -104,5 +117,54 @@ describe("validateEnv", () => {
 
   it("throws when CORS_ORIGIN is an empty string", () => {
     expect(() => validateEnv({ ...validEnv, CORS_ORIGIN: "" })).toThrow();
+  });
+
+  it("applies defaults for JWT_ACCESS_TTL/JWT_REFRESH_TTL_DAYS when omitted", () => {
+    const { JWT_ACCESS_TTL: _t, JWT_REFRESH_TTL_DAYS: _d, ...rest } = validEnv;
+
+    const env = validateEnv(rest);
+
+    expect(env.JWT_ACCESS_TTL).toBe("15m");
+    expect(env.JWT_REFRESH_TTL_DAYS).toBe(30);
+  });
+
+  it("coerces JWT_REFRESH_TTL_DAYS to a number", () => {
+    const env = validateEnv(validEnv);
+
+    expect(env.JWT_REFRESH_TTL_DAYS).toBe(30);
+    expect(typeof env.JWT_REFRESH_TTL_DAYS).toBe("number");
+  });
+
+  it("throws when JWT_ACCESS_PRIVATE_KEY doesn't look like a PEM private key", () => {
+    expect(() => validateEnv({ ...validEnv, JWT_ACCESS_PRIVATE_KEY: "not-a-pem-key" })).toThrow(
+      /Configuração de ambiente inválida/,
+    );
+  });
+
+  it("throws when JWT_ACCESS_PUBLIC_KEY doesn't look like a PEM public key", () => {
+    expect(() => validateEnv({ ...validEnv, JWT_ACCESS_PUBLIC_KEY: "not-a-pem-key" })).toThrow(
+      /Configuração de ambiente inválida/,
+    );
+  });
+
+  it.each(["15", "fifteen", "15 minutes", ""])(
+    "throws when JWT_ACCESS_TTL is not a valid `ms`-style duration (%s)",
+    (value) => {
+      expect(() => validateEnv({ ...validEnv, JWT_ACCESS_TTL: value })).toThrow();
+    },
+  );
+
+  it("throws when PASSWORD_PEPPER is an empty string", () => {
+    expect(() => validateEnv({ ...validEnv, PASSWORD_PEPPER: "" })).toThrow();
+  });
+
+  it("throws when PASSWORD_PEPPER is shorter than 32 characters", () => {
+    expect(() => validateEnv({ ...validEnv, PASSWORD_PEPPER: "short-pepper" })).toThrow();
+  });
+
+  it("accepts PASSWORD_PEPPER at the 32-character boundary", () => {
+    expect(() =>
+      validateEnv({ ...validEnv, PASSWORD_PEPPER: "x".repeat(32) }),
+    ).not.toThrow();
   });
 });

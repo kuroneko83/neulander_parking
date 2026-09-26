@@ -35,6 +35,17 @@
  * rather than trusted from the locally generated `newId()` — otherwise the second run would
  * try to insert memberships pointing at ids that were never actually written on the first
  * run's conflict path.
+ *
+ * **`PASSWORD_PEPPER` (ULTRAPLAN 1.3 fix)**: `PasswordHasher.verify` always calls
+ * `argon2.verify(hash, password, { secret: <PASSWORD_PEPPER> })` (Argon2's `secret`/`K`
+ * parameter, mixed into the tag computation — see `password-hasher.ts`). A hash computed
+ * without that same secret can never verify, so `seedIdentity` must hash with the exact
+ * same pepper `PasswordHasher` will later verify with, or every seeded demo account is
+ * permanently locked out. This runs outside Nest DI (`database/seed.ts` calls it via a
+ * standalone script, not `AppConfigService`), so it reads `process.env.PASSWORD_PEPPER`
+ * directly — safe here because `database/seed.ts` calls `loadRootEnvFile()` before its
+ * dynamic `import("../modules/identity")` (see that file's own comment), so the env var is
+ * already populated by the time this module's top-level code or `seedIdentity` runs.
  */
 import * as argon2 from "argon2";
 import { eq } from "drizzle-orm";
@@ -78,9 +89,18 @@ interface SeedUserInput {
 
 /** Inserts a `users` row if `email` doesn't already exist, then returns its id either way
  * (freshly inserted, or the pre-existing row's) — the idempotent-insert pattern this whole
- * file follows for every table with a natural unique key. */
-async function ensureUser(
-  db: NodePgDatabase,
+ * file follows for every table with a natural unique key.
+ *
+ * Generic over `TSchema` (rather than plain `NodePgDatabase`) so this accepts BOTH a
+ * schema-less client (`database/seed.ts`'s own standalone `drizzle(pool)`,
+ * `test/identity/seed.int.test.ts`'s own) and the app's schema-typed `Database`
+ * (`test/identity/auth.int.test.ts`'s `app.get(DATABASE_CONNECTION)`, used there to
+ * re-seed demo accounts inside a login regression test) — `NodePgDatabase`'s default
+ * `TSchema = Record<string, never>` and a concrete schema type are not assignable to each
+ * other under `exactOptionalPropertyTypes`, but inferring `TSchema` from whatever's passed
+ * in sidesteps that entirely. */
+async function ensureUser<TSchema extends Record<string, unknown>>(
+  db: NodePgDatabase<TSchema>,
   passwordHash: string,
   input: SeedUserInput,
 ): Promise<string> {
@@ -107,9 +127,10 @@ async function ensureUser(
   return existing.id;
 }
 
-/** Same idempotent-insert-then-resolve pattern as `ensureUser`, keyed by `cnpj`. */
-async function ensureOrganization(
-  db: NodePgDatabase,
+/** Same idempotent-insert-then-resolve pattern as `ensureUser`, keyed by `cnpj`. Generic over
+ * `TSchema` for the same reason as `ensureUser` above. */
+async function ensureOrganization<TSchema extends Record<string, unknown>>(
+  db: NodePgDatabase<TSchema>,
   input: { name: string; legalName: string; cnpj: string },
 ): Promise<string> {
   const inserted = await db
@@ -135,8 +156,8 @@ async function ensureOrganization(
 /** `memberships` has no other seed step depending on its id, so — unlike `ensureUser`/
  * `ensureOrganization` — this only needs to be a no-op on repeat, not also resolve/return
  * anything. */
-async function ensureMembership(
-  db: NodePgDatabase,
+async function ensureMembership<TSchema extends Record<string, unknown>>(
+  db: NodePgDatabase<TSchema>,
   input: { organizationId: string; userId: string; role: "owner" | "manager" | "operator" },
 ): Promise<void> {
   await db
@@ -153,10 +174,25 @@ async function ensureMembership(
 /**
  * Seeds: `platform_admin` (no membership) · demo org "Estacionamento Demo" · owner/manager/
  * operator memberships in it (3 distinct users — see file header) · 1 `driver` (no
- * membership). Called from `apps/api/src/database/seed.ts`'s `runSeed`.
+ * membership). Called from `apps/api/src/database/seed.ts`'s `runSeed`, and also directly
+ * from `test/identity/auth.int.test.ts` (against the app's schema-typed `Database`) to
+ * guard the "seeded accounts can actually log in" regression — see `ensureUser`'s comment
+ * on why this is generic over `TSchema`.
  */
-export async function seedIdentity(db: NodePgDatabase): Promise<void> {
-  const passwordHash = await argon2.hash(DEMO_SEED_PASSWORD, { type: argon2.argon2id });
+export async function seedIdentity<TSchema extends Record<string, unknown>>(
+  db: NodePgDatabase<TSchema>,
+): Promise<void> {
+  const pepper = process.env["PASSWORD_PEPPER"];
+  if (!pepper) {
+    throw new Error(
+      "[db:seed] identity: PASSWORD_PEPPER não definido. Copie .env.example para .env na raiz do monorepo.",
+    );
+  }
+
+  const passwordHash = await argon2.hash(DEMO_SEED_PASSWORD, {
+    type: argon2.argon2id,
+    secret: Buffer.from(pepper, "utf8"),
+  });
 
   const [adminEmail, ownerEmail, managerEmail, operatorEmail, driverEmail] = DEMO_SEED_EMAILS;
 

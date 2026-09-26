@@ -108,6 +108,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ULTRAPLAN 1.3 (identity: register/login/refresh) is the first task that reads
+      # JWT_ACCESS_PRIVATE_KEY/PUBLIC_KEY at runtime (env.schema.ts validates them, and the
+      # API actually signs/verifies RS256 tokens with them) — the CI Postgres/Redis have no
+      # `.env` file (this job only ever injects env vars directly into `env:` blocks, see
+      # ULTRAPLAN 0.9's own note above), and the `.env.example` "CHANGE_ME" placeholders
+      # are not real PEM key material, so they can't be reused here either. Generate a
+      # throwaway RSA keypair, scoped to this one CI run, and export it via `$GITHUB_ENV`
+      # (multi-line values need the `<<EOF` heredoc form) so every later step's `env:` block
+      # can reference it — never committed, never reused across runs.
+      - name: Generate an ephemeral RSA keypair for JWT signing (CI-only, never committed)
+        run: |
+          openssl genrsa -out /tmp/jwt-private.pem 2048
+          openssl rsa -in /tmp/jwt-private.pem -pubout -out /tmp/jwt-public.pem
+          {
+            echo "JWT_ACCESS_PRIVATE_KEY<<EOF"
+            cat /tmp/jwt-private.pem
+            echo "EOF"
+            echo "JWT_ACCESS_PUBLIC_KEY<<EOF"
+            cat /tmp/jwt-public.pem
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+          rm -f /tmp/jwt-private.pem /tmp/jwt-public.pem
+
       - name: Lint (todo o monorepo)
         run: pnpm lint
 
@@ -132,6 +155,15 @@ jobs:
           NODE_ENV: test
           DATABASE_URL: postgresql://neulander:neulander@localhost:5432/neulander_parking
           REDIS_URL: redis://localhost:6379
+          # `AppConfigModule` validates the full env schema (env.schema.ts) at import time
+          # for EVERY integration test that boots `AppModule` — not just
+          # `test/identity/auth.int.test.ts` — so this is required for the whole
+          # `pnpm test:int` run, not only the identity ones. JWT_ACCESS_PRIVATE_KEY/
+          # PUBLIC_KEY come from `$GITHUB_ENV` (the "Generate an ephemeral RSA keypair"
+          # step above) via `turbo.json`'s `passThroughEnv`; this is just a fixed,
+          # non-secret CI value satisfying `PASSWORD_PEPPER`'s "at least 32 characters" check
+          # (37 chars) — never used outside this job.
+          PASSWORD_PEPPER: ci-ephemeral-pepper-not-a-real-secret
 
       - name: Build
         run: pnpm build

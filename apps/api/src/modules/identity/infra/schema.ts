@@ -160,6 +160,13 @@ export const memberships = pgTable(
  *
  * `index(user_id)`: ADR-0004/1.4's "list a user's active sessions"/"revoke all of a user's
  * refresh tokens" queries filter by `user_id` — data-model.md lists this index explicitly.
+ *
+ * `index(family_id)` (ULTRAPLAN 1.3 security review, added after this table's original
+ * migration — CLAUDE.md: never edit an applied migration, so this lands as its own new one):
+ * `RefreshTokensRepository.revokeFamily` filters on `family_id` and is the exact query that
+ * runs on the unauthenticated reuse-detection path (`POST /v1/auth/refresh` presented with
+ * an already-rotated token) — without an index that's a sequential scan over a table that
+ * only ever grows (one row per login/refresh, no purge job yet).
  */
 export const refreshTokens = pgTable(
   "refresh_tokens",
@@ -178,5 +185,6 @@ export const refreshTokens = pgTable(
   (table) => [
     unique("refresh_tokens_token_hash_unique").on(table.tokenHash),
     index("refresh_tokens_user_id_idx").on(table.userId),
+    index("refresh_tokens_family_id_idx").on(table.familyId),
   ],
 );

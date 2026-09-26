@@ -101,6 +101,24 @@ export const TokenPairSchema = z.object({
 export type TokenPair = z.infer<typeof TokenPairSchema>;
 
 /**
+ * `POST /v1/auth/refresh` (public — rotação de refresh token, ULTRAPLAN 1.3). Not part of
+ * the original 1.1 contract set — added now because this is the task that first needs it.
+ * `refreshToken` is optional, not required, because ADR-0004 has web and mobile presenting
+ * the refresh token two different ways: web never puts it in the body at all (it rides
+ * along as the `HttpOnly` cookie set by `/v1/auth/login`/`/v1/auth/refresh` themselves, so
+ * the browser attaches it automatically); mobile (no cookie jar tied to the app the same
+ * way, SecureStore instead) sends it explicitly in the body. A single optional field lets
+ * both request shapes validate against the same schema — the controller falls back to the
+ * cookie when the body doesn't carry one, and treats "neither present" as an invalid token
+ * (same `RefreshTokenInvalidError` as a token that doesn't exist in the database, rather
+ * than a separate "missing field" `400` — no information is leaked either way).
+ */
+export const RefreshInputSchema = z.object({
+  refreshToken: z.string().min(1).optional(),
+});
+export type RefreshInput = z.infer<typeof RefreshInputSchema>;
+
+/**
  * One `memberships` row as exposed to the authenticated user themselves via `GET /v1/me`:
  * `organizationId` + the `OrganizationRole` held there + `parkingLotIds`, the operator's scope
  * within that organization (`data-model.md`: "escopo do operador; vazio = todos" — an empty

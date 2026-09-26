@@ -182,6 +182,32 @@ export default [
               },
             },
             {
+              // `modules/identity/domain/auth-errors.ts` (ULTRAPLAN 1.3) estende
+              // `DomainError` — mesmo motivo da exceção de
+              // `problem-details.exception-filter.ts` logo abaixo: importar o barril
+              // `modules/shared` avaliaria `SharedModule` -> `AppConfigModule` (valida
+              // `process.env` no momento do import), quebrando o teste de unidade puro
+              // deste arquivo (`auth-errors.test.ts`, sem `.env` carregado — roda em
+              // `pnpm test`, não em `pnpm test:int`). `domain/domain-error.ts` é TS puro
+              // exatamente para permitir isso.
+              from: {
+                element: {
+                  type: "module-layer",
+                  captured: { module: "identity", layer: "domain" },
+                  fileInternalPath: "auth-errors.ts",
+                },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: "module-layer",
+                    captured: { module: "shared", layer: "domain" },
+                    fileInternalPath: "domain-error.ts",
+                  },
+                },
+              },
+            },
+            {
               // `problem-details.exception-filter.ts` importa `DomainError` do arquivo puro
               // em vez do barril de propósito: o barril também exporta `SharedModule`, que
               // avaliaria `AppConfigModule`/`DatabaseModule` (leem `process.env`/abrem pool
