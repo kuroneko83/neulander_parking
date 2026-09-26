@@ -18,7 +18,7 @@
   do Postgres ainda vazava parâmetros de bind em 500 fora do caso de violação de unicidade). Gap conhecido e
   deliberadamente adiado: convite não pode ser revogado e papel de quem convidou não é revalidado no aceite —
   ver nota na tarefa 1.5 e pré-requisito anotado na 1.8. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
-  verdes localmente; **não foi feito push ainda**.
+  verdes localmente e no CI após o push (run `36251200790`).
 - **Próximo passo (rodar `/next-task` sem argumento pega isto automaticamente):** tarefa **1.6** — "Rate limit em
   login/registro (Redis)", `backend-engineer`. Ao pegar essa tarefa, incluir `/v1/invitations/*` no escopo do
   rate limit (nota da revisão de segurança da 1.5: `POST /v1/invitations/:token/accept` é rota pública que chega
