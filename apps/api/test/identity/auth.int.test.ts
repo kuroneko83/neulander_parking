@@ -1,8 +1,8 @@
 /**
- * Integration tests for `POST /v1/auth/{register,login,refresh}` (ULTRAPLAN 1.3) —
- * Supertest against a real Nest application and the real Postgres from
- * `infra/docker/compose.yml`, same style as `test/health.int.test.ts`/
- * `test/shared/outbox.int.test.ts`:
+ * Integration tests for `POST /v1/auth/{register,login,refresh,logout}` (ULTRAPLAN 1.3) and
+ * `GET /v1/me` + `JwtAuthGuard` (ULTRAPLAN 1.4) — Supertest against a real Nest application
+ * and the real Postgres from `infra/docker/compose.yml`, same style as
+ * `test/health.int.test.ts`/`test/shared/outbox.int.test.ts`:
  *
  *   docker compose -f infra/docker/compose.yml up -d postgres redis
  *
@@ -42,7 +42,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   >;
 }
 
-describe("POST /v1/auth/register, /v1/auth/login, /v1/auth/refresh (real Postgres from compose)", () => {
+describe("auth: register, login, refresh, logout, /v1/me (real Postgres from compose)", () => {
   let app: INestApplication;
   let db: Database;
   const emailsToCleanUp: string[] = [];
@@ -334,6 +334,188 @@ describe("POST /v1/auth/register, /v1/auth/login, /v1/auth/refresh (real Postgre
         .send({});
 
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe("GET /v1/me (JwtAuthGuard)", () => {
+    const password = "correct horse battery staple";
+
+    async function registerAndLogin(
+      label: string,
+    ): Promise<{ email: string; id: string; accessToken: string }> {
+      const email = uniqueEmail(label);
+      const register = await request(app.getHttpServer())
+        .post("/v1/auth/register")
+        .send({ email, password, name: "Motorista Teste" });
+      const login = await request(app.getHttpServer())
+        .post("/v1/auth/login")
+        .send({ email, password });
+      return {
+        email,
+        id: (register.body as { id: string }).id,
+        accessToken: (login.body as { accessToken: string }).accessToken,
+      };
+    }
+
+    it("401s without an Authorization header", async () => {
+      const response = await request(app.getHttpServer()).get("/v1/me");
+
+      expect(response.status).toBe(401);
+    });
+
+    it("401s with a malformed/garbage Bearer token", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/v1/me")
+        .set("Authorization", "Bearer not-a-real-jwt");
+
+      expect(response.status).toBe(401);
+    });
+
+    it("200s with the caller's own profile for a driver with no memberships", async () => {
+      const { email, id, accessToken } = await registerAndLogin("me-driver");
+
+      const response = await request(app.getHttpServer())
+        .get("/v1/me")
+        .set("Authorization", `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id,
+        email,
+        name: "Motorista Teste",
+        roleGlobal: "driver",
+        memberships: [],
+      });
+    });
+
+    it("200s with memberships for a seeded org member (gestor)", async () => {
+      await seedIdentity(db);
+
+      const login = await request(app.getHttpServer())
+        .post("/v1/auth/login")
+        .send({ email: "gestor@estacionamento-demo.neulander.dev", password: DEMO_SEED_PASSWORD });
+      const { accessToken } = login.body as { accessToken: string };
+      const claims = decodeJwtPayload(accessToken) as {
+        roles: { organizationId: string; role: string; parkingLotIds: string[] }[];
+      };
+      const [expectedMembership] = claims.roles;
+
+      const response = await request(app.getHttpServer())
+        .get("/v1/me")
+        .set("Authorization", `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        email: "gestor@estacionamento-demo.neulander.dev",
+        roleGlobal: null,
+        memberships: [
+          {
+            organizationId: expectedMembership?.organizationId,
+            role: "manager",
+            parkingLotIds: [],
+          },
+        ],
+      });
+    });
+  });
+
+  describe("POST /v1/auth/logout (JwtAuthGuard)", () => {
+    const password = "correct horse battery staple";
+
+    async function registerAndLogin(
+      label: string,
+    ): Promise<{ accessToken: string; refreshToken: string }> {
+      const email = uniqueEmail(label);
+      await request(app.getHttpServer())
+        .post("/v1/auth/register")
+        .send({ email, password, name: "Motorista Teste" });
+      const login = await request(app.getHttpServer())
+        .post("/v1/auth/login")
+        .send({ email, password });
+      return login.body as { accessToken: string; refreshToken: string };
+    }
+
+    it("401s without an Authorization header", async () => {
+      const response = await request(app.getHttpServer()).post("/v1/auth/logout").send({});
+
+      expect(response.status).toBe(401);
+    });
+
+    it("204s and revokes the presented refresh token's whole family", async () => {
+      const { accessToken, refreshToken } = await registerAndLogin("logout-ok");
+
+      const response = await request(app.getHttpServer())
+        .post("/v1/auth/logout")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ refreshToken });
+
+      expect(response.status).toBe(204);
+
+      // The revoked token no longer works for a refresh — same signal reuse detection
+      // itself produces, since `LogoutUseCase` calls the same `revokeFamily`.
+      const refreshAttempt = await request(app.getHttpServer())
+        .post("/v1/auth/refresh")
+        .send({ refreshToken });
+      expect(refreshAttempt.status).toBe(401);
+    });
+
+    it("clears the refresh_token cookie on the response", async () => {
+      const { accessToken, refreshToken } = await registerAndLogin("logout-clears-cookie");
+
+      const response = await request(app.getHttpServer())
+        .post("/v1/auth/logout")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ refreshToken });
+
+      const rawSetCookie = response.headers["set-cookie"] as unknown as
+        string[] | string | undefined;
+      const setCookieValues = Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie ?? ""];
+      expect(
+        setCookieValues.some(
+          (cookie) => cookie.startsWith("refresh_token=") && /Expires=Thu, 01 Jan 1970/i.test(cookie),
+        ),
+      ).toBe(true);
+    });
+
+    it("204s (idempotent, no oracle) with no refresh token presented at all", async () => {
+      const { accessToken } = await registerAndLogin("logout-no-token");
+
+      const response = await request(app.getHttpServer())
+        .post("/v1/auth/logout")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({});
+
+      expect(response.status).toBe(204);
+    });
+
+    it("204s (idempotent, no oracle) with an unknown refresh token", async () => {
+      const { accessToken } = await registerAndLogin("logout-unknown-token");
+
+      const response = await request(app.getHttpServer())
+        .post("/v1/auth/logout")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ refreshToken: "this-token-was-never-issued" });
+
+      expect(response.status).toBe(204);
+    });
+
+    it("204s (idempotent, no oracle) with a refresh token that belongs to a DIFFERENT user", async () => {
+      const caller = await registerAndLogin("logout-cross-user-caller");
+      const victim = await registerAndLogin("logout-cross-user-victim");
+
+      const response = await request(app.getHttpServer())
+        .post("/v1/auth/logout")
+        .set("Authorization", `Bearer ${caller.accessToken}`)
+        .send({ refreshToken: victim.refreshToken });
+
+      expect(response.status).toBe(204);
+
+      // The victim's own refresh token is untouched — logging out with someone else's
+      // token must never let a caller revoke a session that isn't theirs.
+      const victimRefresh = await request(app.getHttpServer())
+        .post("/v1/auth/refresh")
+        .send({ refreshToken: victim.refreshToken });
+      expect(victimRefresh.status).toBe(200);
     });
   });
 });

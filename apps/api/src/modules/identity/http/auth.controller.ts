@@ -1,5 +1,5 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   LoginInputSchema,
   RefreshInputSchema,
@@ -12,14 +12,21 @@ import { createZodDto } from "nestjs-zod";
 
 import { AppConfigService } from "../../../config/app-config.service";
 import { LoginUseCase } from "../application/login.use-case";
+import { LogoutUseCase } from "../application/logout.use-case";
 import { RefreshTokenUseCase } from "../application/refresh-token.use-case";
 import type { RegisterUserResult } from "../application/register-user.use-case";
 import { RegisterUserUseCase } from "../application/register-user.use-case";
 import { RefreshTokenInvalidError } from "../domain/auth-errors";
+import type { AuthenticatedRequest } from "./guards/authenticated-request";
+import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 
 class RegisterDto extends createZodDto(RegisterInputSchema) {}
 class LoginDto extends createZodDto(LoginInputSchema) {}
 class RefreshDto extends createZodDto(RefreshInputSchema) {}
+// Same optional-`refreshToken` shape `refresh` validates against — `logout` accepts the
+// token the exact same two ways (cookie for web, body for mobile), so it reuses the
+// contract rather than declaring an identical one under a new name.
+class LogoutDto extends createZodDto(RefreshInputSchema) {}
 
 /** Name of the `HttpOnly` cookie the web client relies on (ADR-0004: "web usa cookie
  * `HttpOnly` pro refresh"). Scoped to `path: "/v1/auth"` — the only routes that ever need
@@ -49,10 +56,19 @@ function readCookie(header: string | undefined, name: string): string | undefine
   return undefined;
 }
 
+/** Same body-then-cookie fallback `refresh` and `logout` both need — reads whichever the
+ * caller presented (web: cookie only; mobile: body only), or `undefined` if neither did. */
+function extractPresentedRefreshToken(
+  bodyToken: string | undefined,
+  req: Request,
+): string | undefined {
+  return bodyToken ?? readCookie(req.headers.cookie, REFRESH_TOKEN_COOKIE);
+}
+
 /**
- * `/v1/auth/*` (ULTRAPLAN 1.3) — register/login/refresh, all public per
- * `api-and-events.md`'s "Auth & identidade" table. `logout`/`me` are explicitly NOT here:
- * both need `JwtAuthGuard`, which lands in ULTRAPLAN 1.4 — see that task's own scope note.
+ * `/v1/auth/*` — register/login/refresh (ULTRAPLAN 1.3) are public per `api-and-events.md`'s
+ * "Auth & identidade" table; `logout` (ULTRAPLAN 1.4) requires `JwtAuthGuard`. `GET /v1/me`
+ * lives in `MeController` instead — a different route prefix (`/v1/me`, not `/v1/auth/me`).
  *
  * Decision on `TokenPair`'s wire shape (`packages/contracts` deliberately leaves this to
  * the controller): `login`/`refresh` always return BOTH `accessToken` and `refreshToken`
@@ -71,6 +87,7 @@ export class AuthController {
     private readonly registerUserUseCase: RegisterUserUseCase,
     private readonly loginUseCase: LoginUseCase,
     private readonly refreshTokenUseCase: RefreshTokenUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
     private readonly appConfig: AppConfigService,
   ) {}
 
@@ -101,8 +118,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenPair> {
-    const presentedToken =
-      body.refreshToken ?? readCookie(req.headers.cookie, REFRESH_TOKEN_COOKIE);
+    const presentedToken = extractPresentedRefreshToken(body.refreshToken, req);
     if (!presentedToken) {
       // No token in the body AND no cookie — same error a real-but-unknown token would
       // get (never distinguish "missing" from "invalid" here; both mean "not
@@ -114,6 +130,21 @@ export class AuthController {
     const tokenPair = await this.refreshTokenUseCase.execute(presentedToken);
     this.setRefreshCookie(res, tokenPair.refreshToken);
     return TokenPairSchema.parse(tokenPair);
+  }
+
+  @Post("logout")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Revoga a família de refresh da sessão atual (autenticado)" })
+  async logout(
+    @Body() body: LogoutDto,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const presentedToken = extractPresentedRefreshToken(body.refreshToken, req);
+    await this.logoutUseCase.execute(req.user.sub, presentedToken);
+    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: "/v1/auth" });
   }
 
   private setRefreshCookie(res: Response, refreshToken: string): void {

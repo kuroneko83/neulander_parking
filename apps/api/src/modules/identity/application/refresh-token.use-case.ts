@@ -9,8 +9,8 @@ import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError } from "../dom
 import { addDays } from "../domain/dates";
 import { generateOpaqueRefreshToken, hashOpaqueToken } from "../domain/refresh-token-crypto";
 import {
-  ACCESS_TOKEN_SIGNER,
-  type AccessTokenSignerPort,
+  ACCESS_TOKEN_SERVICE,
+  type AccessTokenServicePort,
   MEMBERSHIPS_REPOSITORY,
   type MembershipsRepositoryPort,
   REFRESH_TOKENS_REPOSITORY,
@@ -57,7 +57,7 @@ export class RefreshTokenUseCase {
     private readonly membershipsRepository: MembershipsRepositoryPort,
     @Inject(REFRESH_TOKENS_REPOSITORY)
     private readonly refreshTokensRepository: RefreshTokensRepositoryPort,
-    @Inject(ACCESS_TOKEN_SIGNER) private readonly accessTokenSigner: AccessTokenSignerPort,
+    @Inject(ACCESS_TOKEN_SERVICE) private readonly accessTokenService: AccessTokenServicePort,
     private readonly appConfig: AppConfigService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -129,13 +129,14 @@ export class RefreshTokenUseCase {
         roles: memberships.map((membership) => ({
           organizationId: membership.organizationId,
           role: membership.role,
+          parkingLotIds: membership.parkingLotIds,
         })),
       };
 
       return {
         kind: "rotated",
         tokenPair: {
-          accessToken: this.accessTokenSigner.sign(claims),
+          accessToken: this.accessTokenService.sign(claims),
           refreshToken: newRefreshPlain,
         },
       };

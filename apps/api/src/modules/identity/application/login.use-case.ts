@@ -9,8 +9,8 @@ import { InvalidCredentialsError } from "../domain/auth-errors";
 import { addDays } from "../domain/dates";
 import { generateOpaqueRefreshToken, hashOpaqueToken } from "../domain/refresh-token-crypto";
 import {
-  ACCESS_TOKEN_SIGNER,
-  type AccessTokenSignerPort,
+  ACCESS_TOKEN_SERVICE,
+  type AccessTokenServicePort,
   MEMBERSHIPS_REPOSITORY,
   type MembershipsRepositoryPort,
   PASSWORD_HASHER,
@@ -23,7 +23,7 @@ import {
 
 /**
  * `POST /v1/auth/login` (ULTRAPLAN 1.3). Issues a fresh `TokenPair`: an RS256 access JWT
- * (`AccessTokenSignerPort`) plus a brand-new refresh token family (`family_id = newId()`,
+ * (`AccessTokenServicePort`) plus a brand-new refresh token family (`family_id = newId()`,
  * ADR-0004) — every successful login starts its own family, independent of any other
  * session the same user already has open elsewhere.
  *
@@ -47,7 +47,7 @@ export class LoginUseCase {
     @Inject(REFRESH_TOKENS_REPOSITORY)
     private readonly refreshTokensRepository: RefreshTokensRepositoryPort,
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasherPort,
-    @Inject(ACCESS_TOKEN_SIGNER) private readonly accessTokenSigner: AccessTokenSignerPort,
+    @Inject(ACCESS_TOKEN_SERVICE) private readonly accessTokenService: AccessTokenServicePort,
     private readonly appConfig: AppConfigService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -70,9 +70,10 @@ export class LoginUseCase {
       roles: memberships.map((membership) => ({
         organizationId: membership.organizationId,
         role: membership.role,
+        parkingLotIds: membership.parkingLotIds,
       })),
     };
-    const accessToken = this.accessTokenSigner.sign(claims);
+    const accessToken = this.accessTokenService.sign(claims);
 
     const now = this.clock.now();
     const refreshToken = generateOpaqueRefreshToken();

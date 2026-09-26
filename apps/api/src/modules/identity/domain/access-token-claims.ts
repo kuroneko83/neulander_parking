@@ -24,10 +24,18 @@ import type { GlobalRole, OrganizationRole } from "@neulander/contracts";
  * place (see that file's own comment): they're different concepts with different
  * cardinality (0-or-1 global role vs. 0-or-many org memberships), and merging them would
  * only make a consumer's code guess which kind of entry it's looking at.
+ *
+ * `roles[].parkingLotIds` (ULTRAPLAN 1.4): `memberships.parking_lot_ids` — data-model.md's
+ * operator scope ("vazio = todos") — embedded per the same "avoid a `memberships` lookup on
+ * every authenticated request" rationale above. `OrgScopeGuard` reads it directly off this
+ * claim to restrict an operator to their assigned lots, with the same staleness trade-off as
+ * `role` itself: a scope change takes up to `JWT_ACCESS_TTL` (15 min) to take effect for an
+ * already-issued token, which this prototype accepts (ADR-0004 doesn't call for token
+ * revocation-on-membership-change).
  */
 export interface AccessTokenClaims {
   /** `sub` — the user's id (`users.id`). */
   sub: string;
   roleGlobal: GlobalRole | null;
-  roles: { organizationId: string; role: OrganizationRole }[];
+  roles: { organizationId: string; role: OrganizationRole; parkingLotIds: string[] }[];
 }

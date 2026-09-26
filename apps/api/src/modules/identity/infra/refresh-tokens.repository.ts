@@ -33,6 +33,11 @@ export class RefreshTokensRepository implements RefreshTokensRepositoryPort {
     return row;
   }
 
+  async findByTokenHash(db: Database, tokenHash: string): Promise<RefreshTokenRecord | undefined> {
+    const [row] = await db.select().from(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash));
+    return row;
+  }
+
   async revoke(db: Database, id: string, revokedAt: Date, replacedBy: string): Promise<void> {
     await db.update(refreshTokens).set({ revokedAt, replacedBy }).where(eq(refreshTokens.id, id));
   }

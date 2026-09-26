@@ -16,7 +16,21 @@
  * the former, and `apps/api/test/identity/seed.int.test.ts` the latter, both from outside
  * this module; the boundaries rule only requires going through this barrel, not that this
  * barrel export nothing infra-shaped.
+ *
+ * The `http/guards/*` exports (ULTRAPLAN 1.4) are this module's main public surface for
+ * every OTHER module: `JwtAuthGuard`/`RolesGuard`/`OrgScopeGuard`/`@Roles()` are how a
+ * future module (facilities, sessions, payments, ...) protects its own controllers
+ * (`@UseGuards(JwtAuthGuard, OrgScopeGuard, RolesGuard) @Roles("owner", "manager")`) without
+ * ever importing `modules/identity/http/guards/*` directly — `IdentityModule` is `@Global()`
+ * so these three guard classes resolve via Nest DI from anywhere once this barrel exports
+ * them. `AuthenticatedRequest`/`MembershipClaim` are exported alongside them purely as
+ * TYPES, for a consuming controller to type its own `@Req() req: AuthenticatedRequest`.
  */
+export type { AuthenticatedRequest, MembershipClaim } from "./http/guards/authenticated-request";
+export { JwtAuthGuard } from "./http/guards/jwt-auth.guard";
+export { OrgScopeGuard } from "./http/guards/org-scope.guard";
+export { Roles } from "./http/guards/roles.decorator";
+export { RolesGuard } from "./http/guards/roles.guard";
 export { IdentityModule } from "./identity.module";
 export {
   DEMO_ORGANIZATION_CNPJ,

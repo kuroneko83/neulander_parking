@@ -97,6 +97,12 @@ export interface RefreshTokensRepositoryPort {
     db: Database,
     tokenHash: string,
   ): Promise<RefreshTokenRecord | undefined>;
+  /** Plain (no `FOR UPDATE`) lookup — for `LogoutUseCase` (ULTRAPLAN 1.4), which only reads
+   * `userId`/`familyId` to authorize and target a `revokeFamily` call. Logout isn't part of
+   * the rotation race `findByTokenHashForUpdate`'s lock protects against (there's no
+   * "insert the replacement" step to race), so taking that lock here would only hold a row
+   * lock for no reason. */
+  findByTokenHash(db: Database, tokenHash: string): Promise<RefreshTokenRecord | undefined>;
   revoke(db: Database, id: string, revokedAt: Date, replacedBy: string): Promise<void>;
   /** Revokes every not-yet-revoked token sharing `familyId` — ADR-0004's reuse response.
    * Rows already revoked (e.g. by a prior legitimate rotation) keep their original
@@ -115,10 +121,16 @@ export interface PasswordHasherPort {
   verify(hash: string, password: string): Promise<boolean>;
 }
 
-// --- access token signing ---
+// --- access token signing/verification ---
 
-export const ACCESS_TOKEN_SIGNER = Symbol("ACCESS_TOKEN_SIGNER");
+export const ACCESS_TOKEN_SERVICE = Symbol("ACCESS_TOKEN_SERVICE");
 
-export interface AccessTokenSignerPort {
+export interface AccessTokenServicePort {
   sign(claims: AccessTokenClaims): string;
+  /** Verifies signature (RS256, pinned explicitly — never trusts the token's own `alg`
+   * header) and expiry, returning the decoded claims. Throws (`jsonwebtoken`'s
+   * `JsonWebTokenError`/`TokenExpiredError`) on any invalid/expired/malformed token —
+   * `JwtAuthGuard` (ULTRAPLAN 1.4) is the only caller and translates any throw into a
+   * generic `401 UNAUTHORIZED`, never distinguishing the reason to the client. */
+  verify(token: string): AccessTokenClaims;
 }

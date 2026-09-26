@@ -1,12 +1,14 @@
-import { Module } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 
 import { AppConfigModule } from "../../config/app-config.module";
 import { DatabaseModule } from "../../database/database.module";
 import { SharedModule } from "../shared";
+import { GetMeUseCase } from "./application/get-me.use-case";
 import { LoginUseCase } from "./application/login.use-case";
+import { LogoutUseCase } from "./application/logout.use-case";
 import {
-  ACCESS_TOKEN_SIGNER,
+  ACCESS_TOKEN_SERVICE,
   MEMBERSHIPS_REPOSITORY,
   PASSWORD_HASHER,
   REFRESH_TOKENS_REPOSITORY,
@@ -15,6 +17,10 @@ import {
 import { RefreshTokenUseCase } from "./application/refresh-token.use-case";
 import { RegisterUserUseCase } from "./application/register-user.use-case";
 import { AuthController } from "./http/auth.controller";
+import { JwtAuthGuard } from "./http/guards/jwt-auth.guard";
+import { OrgScopeGuard } from "./http/guards/org-scope.guard";
+import { RolesGuard } from "./http/guards/roles.guard";
+import { MeController } from "./http/me.controller";
 import { JwtTokenService } from "./infra/jwt-token.service";
 import { MembershipsRepository } from "./infra/memberships.repository";
 import { PasswordHasher } from "./infra/password-hasher";
@@ -35,24 +41,38 @@ import { UsersRepository } from "./infra/users.repository";
  * options — see `infra/jwt-token.service.ts`'s doc comment for why every signing call
  * passes its own key/algorithm/TTL instead.
  *
- * Still not `@Global()` itself: nothing outside this module needs anything it exports yet
- * (that decision is revisited whenever some other module needs to, e.g., look up a user by
- * id — `UsersRepositoryPort`'s token is intentionally not exported from this module's
- * `index.ts` today, since CLAUDE.md rule 1 forbids reaching into another module's `infra/`
- * regardless of module-global status anyway).
+ * `@Global()` (ULTRAPLAN 1.4, new — previously nothing outside this module needed anything
+ * it exported): `JwtAuthGuard`/`RolesGuard`/`OrgScopeGuard` are cross-cutting infra every
+ * future protected module (facilities, sessions, payments, ...) will `@UseGuards(...)` on
+ * its own controllers, exactly the way `SharedModule`'s `IdempotencyInterceptor` is already
+ * used outside `modules/shared`. Without `@Global()`, every such module would additionally
+ * have to `imports: [IdentityModule]` just to make these three providers resolvable —
+ * `@Global()` here is the same trade-off `AppConfigModule`/`DatabaseModule`/`SharedModule`
+ * already made, for the same reason (kernel-ish infra used everywhere).
+ * `UsersRepositoryPort`/etc.'s tokens are still NOT exported from `index.ts` — `@Global()`
+ * only affects DI visibility of what a module actually exports, and CLAUDE.md rule 1
+ * (no reaching into another module's `infra/`) is enforced by which tokens `index.ts`
+ * re-exports, not by this decorator.
  */
+@Global()
 @Module({
   imports: [AppConfigModule, DatabaseModule, SharedModule, JwtModule.register({})],
-  controllers: [AuthController],
+  controllers: [AuthController, MeController],
   providers: [
     RegisterUserUseCase,
     LoginUseCase,
     RefreshTokenUseCase,
+    LogoutUseCase,
+    GetMeUseCase,
+    JwtAuthGuard,
+    RolesGuard,
+    OrgScopeGuard,
     { provide: USERS_REPOSITORY, useClass: UsersRepository },
     { provide: MEMBERSHIPS_REPOSITORY, useClass: MembershipsRepository },
     { provide: REFRESH_TOKENS_REPOSITORY, useClass: RefreshTokensRepository },
     { provide: PASSWORD_HASHER, useClass: PasswordHasher },
-    { provide: ACCESS_TOKEN_SIGNER, useClass: JwtTokenService },
+    { provide: ACCESS_TOKEN_SERVICE, useClass: JwtTokenService },
   ],
+  exports: [JwtAuthGuard, RolesGuard, OrgScopeGuard],
 })
 export class IdentityModule {}
