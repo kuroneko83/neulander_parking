@@ -1,5 +1,5 @@
 import type { SvgIconComponent } from "@mui/icons-material";
-import SpaceDashboardIcon from "@mui/icons-material/SpaceDashboard";
+import { SpaceDashboard as SpaceDashboardIcon } from "@mui/icons-material";
 
 import type { DictionaryKey } from "../../shared/i18n/t";
 

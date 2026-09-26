@@ -1,6 +1,8 @@
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorIcon from "@mui/icons-material/Error";
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
+import {
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  HourglassEmpty as HourglassEmptyIcon,
+} from "@mui/icons-material";
 import Box from "@mui/material/Box";
 import Chip, { type ChipProps } from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
