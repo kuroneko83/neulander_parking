@@ -44,7 +44,7 @@
   manter a conta "bloqueada" repetidamente — precisa de sinal ortogonal (CAPTCHA, throttling adaptativo), fora
   de escopo. Dependência pendente pra Fase 11: `trust proxy` só é seguro com o security group certo na infra AWS
   — anotado como pré-requisito na tarefa **11.1**. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
-  verdes localmente.
+  verdes localmente e no CI após o push (run `36563306204`).
 - **Estado do ambiente local (2026-09-29):** `docker compose` (postgres/redis/mailpit/localstack) sobe com
   `docker compose -f infra/docker/compose.yml up -d && pnpm dev` a partir da raiz (dev server da API usa
   `pnpm --filter api dev`, watch mode). Se `pnpm test:int` falhar de forma determinística com "expected 1 to be
