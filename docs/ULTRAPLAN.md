@@ -19,74 +19,40 @@
   deliberadamente adiado: convite não pode ser revogado e papel de quem convidou não é revalidado no aceite —
   ver nota na tarefa 1.5 e pré-requisito anotado na 1.8. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
   verdes localmente e no CI após o push (run `36251200790`).
-- **PAUSADA EM ANDAMENTO, NÃO COMMITADA: tarefa 1.6** — "Rate limit em login/registro (Redis)", `backend-engineer`.
-  Leia este bloco inteiro antes de tocar em qualquer coisa relacionada a rate limit ou na working tree
-  (não fazer `git stash`/`checkout --`/`clean` sem olhar `git status` primeiro — há trabalho real não commitado).
-
-  **① Onde a sessão parou:** a implementação de 1.6 foi escrita, passou `pnpm lint && pnpm typecheck && pnpm test
-  && pnpm test:int --filter api` (tudo verde) e então foi revisada por `code-reviewer` + `security-reviewer` —
-  **os dois pediram mudanças** (lista completa abaixo). Foi pedido ao `backend-engineer` pra aplicar as
-  correções, mas o usuário interrompeu esse trabalho antes de qualquer correção ser feita, pra documentar o
-  estado e pausar a sessão. Resultado: **a working tree tem a implementação original, pré-correção — exatamente
-  a versão que os dois relatórios de revisão avaliaram e rejeitaram.** Nenhum commit foi feito.
-
-  Arquivos não commitados (a implementação pré-correção, seguem lá — confirme com `git status --short` antes de
-  continuar, deve bater com esta lista): `apps/api/package.json`, `pnpm-lock.yaml`,
-  `apps/api/src/common/problem-details.exception-filter.ts(.test.ts)`,
-  `apps/api/src/modules/identity/http/{auth,invitations,members}.controller.ts`,
-  `apps/api/src/modules/shared/{index.ts,shared.module.ts}`,
-  `apps/api/src/modules/shared/infra/{rate-limit.config,redis-throttler-storage}.ts(.test.ts)` (novos),
-  `apps/api/test/{identity/rate-limit,shared/redis-throttler-storage}.int.test.ts` (novos),
-  `docs/architecture/api-and-events.md`.
-
-  O que a implementação faz (pra contexto, não é o que falta): `@nestjs/throttler` + `RedisThrottlerStorage`
-  (ioredis + Lua script) com tiers `strict` (15 min, 8/identificador + 30/IP — login, registro, aceite de
-  convite) e `moderate` (1 min, 60/IP — refresh, preview de convite, criação de convite), 429 mapeado pro
-  formato RFC 9457 existente.
-
-  **② Onde a próxima sessão deve começar:** NÃO passar pela 1.6 nem pegar outra tarefa antes de resolver isto.
-  Retomar exatamente no ponto da correção — chamar `backend-engineer` pra aplicar a lista de achados abaixo
-  sobre os arquivos já listados (a implementação já existe, é só corrigir, não reescrever do zero).
-
-  **③ Direção obrigatória — corrigir antes de commitar, nesta ordem de prioridade:**
-  - **[BLOQUEANTE · HIGH · security-reviewer]** `trust proxy` do Express nunca é configurado. Em produção
-    (ALB → ECS Fargate), `req.ip` vira o IP privado do ALB pra todo cliente — a tier `strictIp` (30/15min)
-    estoura primeiro e devolve 429 pra **a plataforma inteira** por 15 min com só ~31 requisições de um
-    atacante não-autenticado contra `/v1/auth/login`. Corrigir com `app.set('trust proxy', 1)` (ou o CIDR real
-    da VPC) — **nunca** `trust proxy: true` (isso confia no `X-Forwarded-For` do próprio atacante e piora o
-    problema). Adicionar teste de XFF forjado não criar bucket novo + teste de hop real contar certo.
-  - **[BLOQUEANTE · MEDIUM · security-reviewer]** o bucket por identificador (e-mail) conta login
-    **bem-sucedido** também — qualquer um que saiba o e-mail de alguém consegue bloquear essa conta por 15 min
-    repetidamente (DoS de conta), mesmo a vítima digitando a senha certa. Corrigir: só contar falha
-    (`InvalidCredentialsError`) no bucket de identificador, ou resetar o bucket no login bem-sucedido; manter
-    contagem de tudo só na tier IP.
-  - **[BLOQUEANTE · ambas as revisões]** cliente Redis sem timeout — `maxRetriesPerRequest: null` sem
-    `commandTimeout`/`enableOfflineQueue: false` faz qualquer instabilidade do Redis travar as requisições de
-    auth pra sempre em vez de falhar rápido (o próprio `RedisHealthIndicator` já faz o oposto de propósito, de
-    caso pensado). Definir timeout curto e uma política explícita de fail-open/fail-closed, com teste
-    equivalente ao "Redis unreachable" de `health.int.test.ts`.
-  - **[BLOQUEANTE · code-reviewer]** `onModuleDestroy()` desconecta o Redis **antes** do servidor HTTP drenar
-    requisições em andamento (`callDestroyHook()` roda antes de `dispose()` no `close()` do Nest) — todo
-    `SIGTERM`/deploy normal pode devolver 500 pra requisições em voo nas rotas com rate limit. Trocar por
-    `OnApplicationShutdown`/`onApplicationShutdown()`.
-  - **[nits, opcionais mas baratos — fazer na mesma passada]** headers `X-RateLimit-*-<tier>` vazando nome da
-    tier/contagem restante (`setHeaders: false`); nenhum log quando um limite é estourado (`maskEmail()` se
-    logar identificador); chaves do Lua script sem hash tag pra Redis Cluster + sem namespace de ambiente;
-    nenhum guard `APP_GUARD` padrão como rede de segurança pra rota futura sem decorator.
-
-  **④ Depois de corrigir:** rodar `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int --filter api`,
-  re-rodar `code-reviewer` + `security-reviewer` sobre o diff corrigido (não pular — foi o mesmo padrão da 1.5:
-  1ª rodada BLOCK, correção, 2ª rodada PASS), só então marcar `[x]` na 1.6, commitar (padrão do projeto: commit
-  `feat` de código primeiro, commit `docs` separado pro ULTRAPLAN/ADRs depois, igual foi feito na 1.5 —
-  `1469116`/`5211c2f`), rodar CI (`gh workflow run ci.yml --ref <branch>`) e só então seguir pra 1.7.
-- **Estado do ambiente local no fim desta sessão (2026-09-26):** `docker compose` (postgres/redis/mailpit/
-  localstack) e os dois dev servers (`api` na porta 3333, `web` na 5173) estavam todos rodando e saudáveis —
-  mas eram processos desta sessão de terminal; se não estiverem mais no ar na próxima sessão, suba de novo com
+- **Última tarefa concluída:** 1.6 — Rate limit em login/registro (Redis) (`56f1232`) — `@nestjs/throttler` +
+  `RedisThrottlerStorage` (ioredis + script Lua atômico, ADR-0018) com dois tiers: `strict` (login, registro,
+  aceite de convite) combina limite por IP e por identificador (e-mail/token, hash SHA-256) numa única operação
+  atômica; `moderate` (refresh, preview/criação de convite) só por IP. 429 no formato RFC 9457 com
+  `Retry-After`. Passou por **quatro rodadas** de `code-reviewer`/`security-reviewer` antes de fechar — a mais
+  longa da Fase 1 até agora, registrada aqui em detalhe porque o padrão de bugs encontrados é reaproveitável:
+  rodada 1 (BLOCK/changes-requested): `trust proxy` nunca configurado (IP do ALB some, tier por IP estoura pra
+  toda a plataforma), bucket por identificador contava login bem-sucedido (DoS de conta por e-mail conhecido),
+  cliente Redis sem timeout (trava em vez de falhar rápido), `onModuleDestroy` desconectando o Redis antes do
+  dreno de requisições no shutdown — todos corrigidos. Rodada 2 (APPROVE do code-reviewer, BLOCK do
+  security-reviewer): a correção do bucket por identificador (peek-antes-do-handler + increment-só-na-falha)
+  abriu uma race — sob concorrência, N tentativas simultâneas liam "0 hits" e passavam todas (reproduzido: 60
+  tentativas paralelas de senha errada, 0 bloqueadas) — corrigido voltando a um `increment()` atômico antes do
+  handler, com reset no sucesso. Rodada 3 (APPROVE/PASS, dois achados MEDIUM pedidos antes de fechar): o guard
+  de segurança contra `NODE_ENV=test` vazar em produção era logicamente inalcançável (as duas pontas da
+  condição vinham da mesma env var) — corrigido checando `process.env.VITEST` em vez de `isProduction`; toda
+  requisição bloqueada (não só falha do Redis) gerava uma linha de log completa sem amostragem — um atacante
+  conseguia usar isso como amplificador de custo/ruído de log — corrigido com um sampler compartilhado
+  (`SampledWarnLogger`, no máx. 1 warn/5s por rota). Rodada 4 (APPROVE/PASS): confirmou as correções da rodada 3
+  e pediu só nits (código morto residual removido, comentários corrigidos, um log mascarava só parcialmente um
+  token de convite — trocado por hash). Gap aceito e documentado (ADR-0018, não é regressão desta tarefa):
+  nenhum rate limit por identificador não-autenticado impede um atacante que conhece o e-mail de alguém de
+  manter a conta "bloqueada" repetidamente — precisa de sinal ortogonal (CAPTCHA, throttling adaptativo), fora
+  de escopo. Dependência pendente pra Fase 11: `trust proxy` só é seguro com o security group certo na infra AWS
+  — anotado como pré-requisito na tarefa **11.1**. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
+  verdes localmente.
+- **Estado do ambiente local (2026-09-29):** `docker compose` (postgres/redis/mailpit/localstack) sobe com
   `docker compose -f infra/docker/compose.yml up -d && pnpm dev` a partir da raiz (dev server da API usa
-  `pnpm --filter api dev`, watch mode). Se `pnpm test:int` do módulo `shared`/outbox falhar de forma
-  determinística com "expected 1 to be +0" no teste de dedupe do BullMQ, é lixo acumulado no Redis de sessões
-  de dev anteriores (não é bug de código) — `docker exec neulander-redis redis-cli FLUSHALL` resolve (Redis é
-  só cache/filas neste projeto, ADR-0006/0007, nunca fonte de verdade).
+  `pnpm --filter api dev`, watch mode). Se `pnpm test:int` falhar de forma determinística com "expected 1 to be
+  +0" (dedupe do BullMQ) ou com contagens de seed divergentes, é lixo acumulado de sessões de dev anteriores,
+  não bug de código — `docker exec neulander-redis redis-cli FLUSHALL` resolve o Redis; para o Postgres,
+  `docker compose -f infra/docker/compose.yml down -v && docker compose -f infra/docker/compose.yml up -d` e
+  rodar `pnpm db:migrate --filter api` de novo antes de repetir os testes (Redis e Postgres locais nunca são
+  fonte de verdade entre sessões, ADR-0006/0007).
 - **Bloqueios / notas:** LocalStack (ADR-0015) exige conta gratuita + `LOCALSTACK_AUTH_TOKEN` por desenvolvedor
   desde 23/03/2026; Postgres do compose exposto na porta `5433` e a API na porta `3333` (não `5432`/`3000`) por
   já haver outros projetos nesta máquina de dev ocupando essas portas. `git push` nesta máquina precisa contornar
@@ -153,7 +119,7 @@ Objetivo: qualquer pessoa clona, roda `pnpm i && pnpm dev` e tem API + web no ar
     continua sendo honrado. Antes de 1.8 dar o sinal verde da fase: ou construir um endpoint
     de revogação (`POST /v1/orgs/:orgId/invitations/:id/revoke` ou similar) como
     pré-requisito de 1.7/1.8, ou registrar aqui uma decisão explícita de aceitar o risco.
-- [ ] **1.6** Rate limit em login/registro (Redis) — `backend-engineer`
+- [x] **1.6** Rate limit em login/registro (Redis) — `backend-engineer` (`56f1232`)
 - [ ] **1.7** Web: telas login, aceite de convite, seletor de organização, rotas protegidas por papel, refresh silencioso — `web-engineer`
 - [ ] **1.8** Revisão de segurança da fase — `security-reviewer`
   - Aceite da fase: e2e Playwright "gestor faz login → convida operador → operador aceita e só vê seu lot".
@@ -283,6 +249,10 @@ Equipamentos e custos: `docs/hardware/equipamentos-e-custos.md` — **alvo: plan
 ## Fase 11 — Produção · Marco M5
 
 - [ ] **11.1** Terraform: VPC, ECS Fargate (api, worker), RDS Postgres (PostGIS), ElastiCache, S3+CloudFront, bucket de imagens LPR com lifecycle (expurgo), ALB+WAF, Secrets Manager, ECR — `devops-engineer`
+  - Pré-requisito herdado da 1.6/ADR-0018: o rate limit por IP (`app.set("trust proxy", 1)` em
+    `configure-app.ts`) só é seguro se o security group da task ECS só aceitar tráfego do ALB — garantir isso
+    aqui (hoje não há Terraform, nada valida por código). Considerar tornar o número de hops configurável via
+    env se algum dia entrar um CDN/WAF antes do ALB.
 - [ ] **11.2** CD com GitHub Actions via OIDC: build imagem, migrate one-off, deploy rolling, smoke test — `devops-engineer`
 - [ ] **11.3** OpenTelemetry + Sentry + dashboards e alertas (erro 5xx, fila atrasada, webhook falhando, câmera offline, relatório diário não gerado) — `devops-engineer`
 - [ ] **11.4** k6: pico de 40 sessões/s, 300 buscas/s e ingestão de lotes de fim do dia de 500 estacionamentos em paralelo; relatório no repo — `qa-engineer`

@@ -10,6 +10,7 @@
 - Escritas sensíveis exigem `Idempotency-Key` (UUID) — resposta reproduzida se a chave repetir com o mesmo corpo; `409` se corpo diferente.
 - Datas ISO 8601 UTC. Dinheiro `{ amountCents, currency }`.
 - Erro: `{ type, title, status, detail, code, errors? }` — `code` estável (ex.: `SESSION_ALREADY_OPEN`, `SPOT_UNAVAILABLE`).
+- Rate limit (ULTRAPLAN 1.6, Redis via `@nestjs/throttler`, ver `docs/architecture/system-design.md` §"Rate limiting"): estouro de limite responde `429` no mesmo formato de erro acima (`code: "RATE_LIMITED"`) com um header `Retry-After` (segundos). Duas categorias: **strict** — `POST /v1/auth/register`, `POST /v1/auth/login`, `POST /v1/invitations/:token/accept` — combinam um limite por IP (chave gerada pelo próprio `@nestjs/throttler`) e um por identificador (e-mail ou token do convite, nunca logado em claro — chave própria, hash SHA-256 gerado por `IdentifierFailureThrottleInterceptor`, independente do `@nestjs/throttler`); **moderate** — `POST /v1/auth/refresh`, `GET /v1/invitations/:token`, `POST /v1/orgs/:orgId/members` — só por IP, limite mais alto/janela mais curta (anti-scraping, não anti-brute-force). Valores exatos em `apps/api/src/modules/shared/infra/rate-limit.config.ts`.
 
 ## Endpoints (MVP)
 

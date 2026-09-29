@@ -21,3 +21,4 @@ Formato: contexto → decisão → consequências → alternativas. ADR aceito �
 | [0015](0015-localstack-s3-dev.md) | LocalStack como substituto local de S3 (MinIO descontinuado) |
 | [0016](0016-outbox-relay-sem-ordenacao-por-agregado.md) | Outbox relay sem ordenação por agregado (adiada até haver consumidor real) |
 | [0017](0017-domain-event-dispatcher-registry.md) | Consumo de eventos de domínio: um despachante por fila + registry de handlers |
+| [0018](0018-rate-limit-redis-throttler.md) | Rate limit distribuído (Redis) em auth/convites, com tiers por IP e por identificador |
