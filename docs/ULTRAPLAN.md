@@ -7,44 +7,16 @@
 ## Estado atual
 
 - **Fase atual:** 1 — Identidade & organizações
-- **Última tarefa concluída:** 1.5 — Convite de membros por e-mail (`1469116`) — novo módulo `notifications`
-  (porta `MessagingChannel`, `SmtpEmailChannel`→Mailpit, `FakeChannel` em teste), despachante genérico de eventos
-  de domínio via outbox→BullMQ (`DomainEventBus`/`DomainEventsProcessor`, ADR-0017 — primeiro consumidor real da
-  fila), tabela `invitations`, `InviteMemberUseCase`/`GetInvitationUseCase`/`AcceptInvitationUseCase`. Passou por
-  duas rodadas de `code-reviewer`/`security-reviewer` (1ª rodada: BLOCK/changes-requested por token vazando em
-  log via URL, token de aceite persistido em claro em `outbox_events`, violação de unique não traduzida, HTML
-  não escapado no e-mail, worker travando no shutdown — todos corrigidos; 2ª rodada: APPROVE/PASS, com dois
-  achados novos e menores também corrigidos — IP do cliente some do log por bug no serializer, e erro genérico
-  do Postgres ainda vazava parâmetros de bind em 500 fora do caso de violação de unicidade). Gap conhecido e
-  deliberadamente adiado: convite não pode ser revogado e papel de quem convidou não é revalidado no aceite —
-  ver nota na tarefa 1.5 e pré-requisito anotado na 1.8. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
-  verdes localmente e no CI após o push (run `36251200790`).
-- **Última tarefa concluída:** 1.6 — Rate limit em login/registro (Redis) (`56f1232`) — `@nestjs/throttler` +
-  `RedisThrottlerStorage` (ioredis + script Lua atômico, ADR-0018) com dois tiers: `strict` (login, registro,
-  aceite de convite) combina limite por IP e por identificador (e-mail/token, hash SHA-256) numa única operação
-  atômica; `moderate` (refresh, preview/criação de convite) só por IP. 429 no formato RFC 9457 com
-  `Retry-After`. Passou por **quatro rodadas** de `code-reviewer`/`security-reviewer` antes de fechar — a mais
-  longa da Fase 1 até agora, registrada aqui em detalhe porque o padrão de bugs encontrados é reaproveitável:
-  rodada 1 (BLOCK/changes-requested): `trust proxy` nunca configurado (IP do ALB some, tier por IP estoura pra
-  toda a plataforma), bucket por identificador contava login bem-sucedido (DoS de conta por e-mail conhecido),
-  cliente Redis sem timeout (trava em vez de falhar rápido), `onModuleDestroy` desconectando o Redis antes do
-  dreno de requisições no shutdown — todos corrigidos. Rodada 2 (APPROVE do code-reviewer, BLOCK do
-  security-reviewer): a correção do bucket por identificador (peek-antes-do-handler + increment-só-na-falha)
-  abriu uma race — sob concorrência, N tentativas simultâneas liam "0 hits" e passavam todas (reproduzido: 60
-  tentativas paralelas de senha errada, 0 bloqueadas) — corrigido voltando a um `increment()` atômico antes do
-  handler, com reset no sucesso. Rodada 3 (APPROVE/PASS, dois achados MEDIUM pedidos antes de fechar): o guard
-  de segurança contra `NODE_ENV=test` vazar em produção era logicamente inalcançável (as duas pontas da
-  condição vinham da mesma env var) — corrigido checando `process.env.VITEST` em vez de `isProduction`; toda
-  requisição bloqueada (não só falha do Redis) gerava uma linha de log completa sem amostragem — um atacante
-  conseguia usar isso como amplificador de custo/ruído de log — corrigido com um sampler compartilhado
-  (`SampledWarnLogger`, no máx. 1 warn/5s por rota). Rodada 4 (APPROVE/PASS): confirmou as correções da rodada 3
-  e pediu só nits (código morto residual removido, comentários corrigidos, um log mascarava só parcialmente um
-  token de convite — trocado por hash). Gap aceito e documentado (ADR-0018, não é regressão desta tarefa):
-  nenhum rate limit por identificador não-autenticado impede um atacante que conhece o e-mail de alguém de
-  manter a conta "bloqueada" repetidamente — precisa de sinal ortogonal (CAPTCHA, throttling adaptativo), fora
-  de escopo. Dependência pendente pra Fase 11: `trust proxy` só é seguro com o security group certo na infra AWS
-  — anotado como pré-requisito na tarefa **11.1**. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:int`
-  verdes localmente e no CI após o push (run `36563306204`).
+- **Última tarefa concluída:** 1.6 — Rate limit em login/registro (Redis) — `@nestjs/throttler` +
+  `RedisThrottlerStorage` (ioredis + script Lua atômico) com tiers por IP e por identificador — ver **ADR-0018**
+  para o design completo e os bugs de concorrência encontrados/corrigidos (levou 4 rodadas de
+  `code-reviewer`/`security-reviewer`; vale reler antes de tocar em rate limit de novo). Commits: `56f1232`
+  (feat), `8f0ebb1` (docs/ADR), `c4a74e0` (nota de CI). Gap aceito: nenhum rate limit por identificador
+  não-autenticado impede um atacante que conhece o e-mail de alguém de manter a conta "bloqueada" repetidamente
+  (precisa de CAPTCHA/throttling adaptativo, fora de escopo). Pré-requisito pendente anotado na tarefa **11.1**:
+  `trust proxy` só é seguro com o security group certo na infra AWS (ainda não existe Terraform). `pnpm lint &&
+  pnpm typecheck && pnpm test && pnpm test:int` verdes localmente e no CI (run `36563306204`). Tarefa 1.5
+  (convites por e-mail) fechada antes dela — detalhe em ADR-0017 e no commit `1469116` se precisar.
 - **Estado do ambiente local (2026-09-29):** `docker compose` (postgres/redis/mailpit/localstack) sobe com
   `docker compose -f infra/docker/compose.yml up -d && pnpm dev` a partir da raiz (dev server da API usa
   `pnpm --filter api dev`, watch mode). Se `pnpm test:int` falhar de forma determinística com "expected 1 to be
