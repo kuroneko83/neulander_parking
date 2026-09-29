@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import {
   LoginInputSchema,
   RefreshInputSchema,
@@ -11,6 +12,16 @@ import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
 
 import { AppConfigService } from "../../../config/app-config.service";
+import {
+  EFFECTIVE_MODERATE_IP_LIMIT,
+  EFFECTIVE_STRICT_IP_LIMIT,
+  IdentifierFailureThrottle,
+  MODERATE_IP_THROTTLER,
+  MODERATE_WINDOW_MS,
+  STRICT_IP_THROTTLER,
+  STRICT_WINDOW_MS,
+  trackByBodyField,
+} from "../../shared";
 import { LoginUseCase } from "../application/login.use-case";
 import { LogoutUseCase } from "../application/logout.use-case";
 import { RefreshTokenUseCase } from "../application/refresh-token.use-case";
@@ -19,6 +30,33 @@ import { RegisterUserUseCase } from "../application/register-user.use-case";
 import { RefreshTokenInvalidError } from "../domain/auth-errors";
 import type { AuthenticatedRequest } from "./guards/authenticated-request";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
+
+/**
+ * Rate limit tiers (ULTRAPLAN 1.6, `modules/shared/infra/rate-limit.config.ts` for the
+ * exact numbers/rationale/the two-mechanism split). `ThrottlerGuard`/
+ * `IdentifierFailureThrottleInterceptor` are both GLOBAL now (`app.module.ts`) — no
+ * `@UseGuards(ThrottlerGuard)` needed here, only the decorators that OVERRIDE/OPT IN to the
+ * tiers this controller actually needs:
+ *
+ * `register`/`login` are brute-force targets: `strictIp` (overridden UP from its inert
+ * module-level base to the real number) runs alongside `strictIdentifier` (the
+ * failure-only interceptor, tracking the e-mail from the request body) — BOTH must be
+ * active, since a distributed attacker spread across many IPs still trips the per-e-mail
+ * bucket, and a shared IP (NAT/office) isn't blocked wholesale by someone else's attempts
+ * against a DIFFERENT e-mail.
+ */
+const STRICT_AUTH_IP_THROTTLE = Throttle({
+  [STRICT_IP_THROTTLER]: { limit: EFFECTIVE_STRICT_IP_LIMIT, ttl: STRICT_WINDOW_MS },
+});
+const STRICT_AUTH_IDENTIFIER_THROTTLE = IdentifierFailureThrottle(trackByBodyField("email"));
+
+/** `refresh` (ULTRAPLAN 1.6): moderate, per-IP-only tier — no stable low-cardinality
+ * identifier to key on for a refresh call (the presented token is exactly what's being
+ * verified, not a safe/meaningful rate-limit bucket key), and it's meant to blunt
+ * scraping/abuse rather than brute-force a specific account. */
+const MODERATE_IP_THROTTLE = Throttle({
+  [MODERATE_IP_THROTTLER]: { limit: EFFECTIVE_MODERATE_IP_LIMIT, ttl: MODERATE_WINDOW_MS },
+});
 
 class RegisterDto extends createZodDto(RegisterInputSchema) {}
 class LoginDto extends createZodDto(LoginInputSchema) {}
@@ -93,6 +131,8 @@ export class AuthController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
+  @STRICT_AUTH_IP_THROTTLE
+  @STRICT_AUTH_IDENTIFIER_THROTTLE
   @ApiOperation({ summary: "Cadastro de motorista (público)" })
   register(@Body() body: RegisterDto): Promise<RegisterUserResult> {
     return this.registerUserUseCase.execute(body);
@@ -100,6 +140,8 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
+  @STRICT_AUTH_IP_THROTTLE
+  @STRICT_AUTH_IDENTIFIER_THROTTLE
   @ApiOperation({ summary: "Login — retorna access + refresh token" })
   async login(
     @Body() body: LoginDto,
@@ -112,6 +154,7 @@ export class AuthController {
 
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
+  @MODERATE_IP_THROTTLE
   @ApiOperation({ summary: "Rotação de refresh token" })
   async refresh(
     @Body() body: RefreshDto,

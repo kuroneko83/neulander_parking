@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
+import { ThrottlerException } from "@nestjs/throttler";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import type { PinoLogger } from "nestjs-pino";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,20 +15,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "../modules/shared/domain/domain-error";
 import { ProblemDetailsExceptionFilter } from "./problem-details.exception-filter";
 
-interface MockResponse {
-  status: ReturnType<typeof vi.fn>;
-  setHeader: ReturnType<typeof vi.fn>;
-  send: ReturnType<typeof vi.fn>;
+/** Backed by a real `Map` (not just spies) so `normalizeRetryAfterHeader` — which reads
+ * headers back via `getHeaderNames()`/`getHeader()` and then `removeHeader()`/
+ * `setHeader()` — sees a mock that actually behaves like Express' `Response`, not just one
+ * that records calls. Built as a plain factory (rather than a hand-written `interface` typed
+ * with the generic `ReturnType<typeof vi.fn>`) so each mock's concrete call signature is
+ * inferred from its own implementation — letting test bodies below call `res.setHeader(...)`
+ * directly (to simulate a header `ThrottlerGuard` already set) instead of only asserting on
+ * it. */
+function buildMockResponse() {
+  const headers = new Map<string, string | number>();
+  const res = {
+    status: vi.fn((_code: number) => res),
+    setHeader: vi.fn((name: string, value: string | number) => {
+      headers.set(name, value);
+      return res;
+    }),
+    send: vi.fn((_body: unknown) => res),
+    getHeaderNames: vi.fn((): string[] => [...headers.keys()]),
+    getHeader: vi.fn((name: string) => headers.get(name)),
+    removeHeader: vi.fn((name: string) => {
+      headers.delete(name);
+    }),
+  };
+  return res;
 }
 
+type MockResponse = ReturnType<typeof buildMockResponse>;
+
 function createHost(): { host: ArgumentsHost; res: MockResponse } {
-  const res: MockResponse = {
-    status: vi.fn(),
-    setHeader: vi.fn(),
-    send: vi.fn(),
-  };
-  res.status.mockReturnValue(res);
-  res.setHeader.mockReturnValue(res);
+  const res = buildMockResponse();
 
   const host = {
     switchToHttp: () => ({
@@ -179,6 +196,62 @@ describe("ProblemDetailsExceptionFilter", () => {
 
     expect(res.status).toHaveBeenCalledWith(422);
     expect(sentBody(res)).toMatchObject({ status: 422, code: "INVALID_PLATE" });
+  });
+
+  describe("ThrottlerException (ULTRAPLAN 1.6 — rate limiting)", () => {
+    it("maps to a 429 problem+json body with a friendly pt-BR title/detail, not the raw internal message", () => {
+      const { host, res } = createHost();
+
+      filter.catch(new ThrottlerException(), host);
+
+      expect(res.status).toHaveBeenCalledWith(429);
+      const body = sentBody(res);
+      expect(body).toMatchObject({
+        type: "about:blank",
+        status: 429,
+        code: "RATE_LIMITED",
+      });
+      expect(body["title"]).not.toContain("ThrottlerException");
+      expect(body["detail"]).not.toContain("ThrottlerException");
+    });
+
+    it("copies a throttler-name-suffixed Retry-After header to the bare, standard Retry-After name", () => {
+      const { host, res } = createHost();
+      res.setHeader("Retry-After-strictIdentifier", 42);
+
+      filter.catch(new ThrottlerException(), host);
+
+      expect(res.setHeader).toHaveBeenCalledWith("Retry-After", 42);
+      expect(res.getHeaderNames()).not.toContain("Retry-After-strictIdentifier");
+    });
+
+    it("leaves a bare Retry-After header untouched if the guard already set it unsuffixed", () => {
+      const { host, res } = createHost();
+      res.setHeader("Retry-After", 15);
+
+      filter.catch(new ThrottlerException(), host);
+
+      expect(res.getHeader("Retry-After")).toBe(15);
+    });
+
+    it("doesn't crash/set anything when no Retry-After-ish header is present at all", () => {
+      const { host, res } = createHost();
+
+      expect(() => {
+        filter.catch(new ThrottlerException(), host);
+      }).not.toThrow();
+      expect(res.getHeaderNames().filter((name) => /retry-after/i.test(name))).toEqual([]);
+    });
+
+    it("never normalizes a Retry-After header for a non-429 response", () => {
+      const { host, res } = createHost();
+      res.setHeader("Retry-After-strictIdentifier", 42);
+
+      filter.catch(new NotFoundException(), host);
+
+      // Untouched — normalization only runs for a 429 response.
+      expect(res.getHeaderNames()).toContain("Retry-After-strictIdentifier");
+    });
   });
 
   it("sets the Content-Type header to application/problem+json", () => {

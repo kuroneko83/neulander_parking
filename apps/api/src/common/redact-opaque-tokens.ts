@@ -84,6 +84,40 @@ export interface SerializableRequest {
   remotePort?: number;
 }
 
+/**
+ * Partial IP mask (LGPD, CLAUDE.md rule 10) — round-2 security-review fix (LOW):
+ * `remoteAddress` (the direct TCP peer — the ALB in production, the real client locally)
+ * used to pass through this serializer completely untouched, one field away from
+ * `LoggingThrottlerGuard`'s own carefully-masked tracker (same `requestId`), defeating that
+ * masking's purpose. `X-Forwarded-For`/`X-Real-IP` (the header pair that actually carries
+ * the CLIENT's IP behind the ALB) are instead fully redacted via pino's own `redact.paths`
+ * (`logging.module.ts`) — this function stays responsible only for content that changes
+ * shape per-request (like `redactOpaqueTokens` above), not path-based header redaction.
+ *
+ * Same masking SHAPE as `maskTracker()` in
+ * `modules/shared/infra/logging-throttler.guard.ts` — deliberately duplicated, not
+ * imported: this file lives in `common/`, and importing a sibling module's internal file
+ * would cross the same module-boundary line CLAUDE.md rule 1 draws for `modules/<ctx>/`
+ * internals. A small, self-contained helper here is cheaper than promoting it into a
+ * shared export just for this one extra call site — candidate follow-up: hoist both into a
+ * single `maskIp()` export (`modules/shared/domain/`), noted but out of scope for this
+ * pass. Never throws — safe on arbitrary input, same contract as `maskEmail()`/`maskPlate()`.
+ */
+function maskRemoteAddress(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes(".")) {
+    const parts = trimmed.split(".");
+    if (parts.length === 4) {
+      return `${parts.slice(0, 3).join(".")}.*`;
+    }
+  }
+  if (trimmed.includes(":")) {
+    const groups = trimmed.split(":");
+    return `${groups.slice(0, 2).join(":")}::*`;
+  }
+  return trimmed.length <= 4 ? "***" : `${trimmed.slice(0, 4)}***`;
+}
+
 export function serializeRequestWithRedactedTokens(
   req: SerializableRequest,
 ): Record<string, unknown> {
@@ -94,7 +128,7 @@ export function serializeRequestWithRedactedTokens(
     query: redactOpaqueTokens(req.query ?? {}),
     params: redactOpaqueTokens(req.params ?? {}),
     headers: req.headers,
-    remoteAddress: req.remoteAddress,
+    remoteAddress: req.remoteAddress === undefined ? undefined : maskRemoteAddress(req.remoteAddress),
     remotePort: req.remotePort,
   };
 }

@@ -29,6 +29,7 @@
     "@nestjs/platform-express": "^10",
     "@nestjs/swagger": "^8",
     "@nestjs/terminus": "^10",
+    "@nestjs/throttler": "^6.7.1",
     "@neulander/contracts": "workspace:*",
     "argon2": "^0.45.1",
     "bullmq": "^6.3.8",

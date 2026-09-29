@@ -95,12 +95,12 @@ describe("serializeRequestWithRedactedTokens", () => {
     expect(serialized["headers"]).toEqual({ authorization: `Bearer ${SAMPLE_TOKEN}` });
   });
 
-  it("passes remoteAddress/remotePort through untouched (post-review fix: previously read from a non-existent req.socket)", () => {
+  it("reads remoteAddress/remotePort correctly (post-review fix: previously read from a non-existent req.socket), masking remoteAddress's last octet (round-2 security-review fix, LOW)", () => {
     const serialized = serializeRequestWithRedactedTokens(
       fakeRequest({ remoteAddress: "203.0.113.7", remotePort: 54321 }),
     );
 
-    expect(serialized["remoteAddress"]).toBe("203.0.113.7");
+    expect(serialized["remoteAddress"]).toBe("203.0.113.*");
     expect(serialized["remotePort"]).toBe(54321);
   });
 
@@ -170,6 +170,52 @@ describe("real pino instance wired with this app's logging.module.ts config (end
     expect(req["url"]).toBe("/v1/invitations/[REDACTED]");
     expect(req["params"]).toEqual({ "0": "invitations/[REDACTED]" });
     expect((req["headers"] as Record<string, unknown>)["authorization"]).toBe("[REDACTED]");
+  });
+
+  it("round-2 security-review fix (LOW): X-Forwarded-For/X-Real-IP are redacted via redact.paths, the same way logging.module.ts's real config does it — remoteAddress is masked, not fully redacted", () => {
+    const lines: Record<string, unknown>[] = [];
+    // The exact `x-forwarded-for`/`x-real-ip` entries `logging.module.ts`'s real config adds
+    // (round-2 fix) — a direct end-to-end check that pino's path-based redaction actually
+    // reaches a header nested under this custom serializer's OWN `headers` key, not just the
+    // content-based redaction this serializer does itself.
+    const logger = pino(
+      {
+        redact: {
+          paths: ['req.headers["x-forwarded-for"]', 'req.headers["x-real-ip"]'],
+          censor: "[REDACTED]",
+        },
+        serializers: {
+          req: (req: SerializableRequest) => serializeRequestWithRedactedTokens(req),
+        },
+      },
+      collectingStream(lines),
+    );
+
+    logger.info(
+      {
+        req: {
+          id: "req-3",
+          method: "POST",
+          url: "/v1/auth/login",
+          query: {},
+          params: {},
+          headers: { "x-forwarded-for": "203.0.113.99, 10.0.0.1", "x-real-ip": "203.0.113.99" },
+          remoteAddress: "10.0.0.1",
+          remotePort: 443,
+        },
+      },
+      "request completed",
+    );
+
+    const [line] = lines;
+    const req = line?.["req"] as Record<string, unknown>;
+    const headers = req["headers"] as Record<string, unknown>;
+
+    expect(headers["x-forwarded-for"]).toBe("[REDACTED]");
+    expect(headers["x-real-ip"]).toBe("[REDACTED]");
+    expect(req["remoteAddress"]).toBe("10.0.0.*");
+    expect(JSON.stringify(line)).not.toContain("203.0.113.99");
+    expect(JSON.stringify(line)).not.toContain("10.0.0.1");
   });
 
   it("a request-completed log line for the accept endpoint (POST .../accept) also never contains the raw token", () => {
@@ -252,10 +298,12 @@ describe("real pino-http middleware pipeline (not a hand-built fixture) — end-
     const [line] = lines;
     const req = line?.["req"] as Record<string, unknown>;
 
-    expect(req["remoteAddress"]).toBe("203.0.113.42");
+    // Round-2 security-review fix (LOW): masked, not the raw value.
+    expect(req["remoteAddress"]).toBe("203.0.113.*");
     expect(req["remotePort"]).toBe(54321);
     expect(req["url"]).toBe("/v1/invitations/[REDACTED]");
     expect((req["headers"] as Record<string, unknown>)["authorization"]).toBe("[REDACTED]");
     expect(JSON.stringify(line)).not.toContain(SAMPLE_TOKEN);
+    expect(JSON.stringify(line)).not.toContain("203.0.113.42");
   });
 });

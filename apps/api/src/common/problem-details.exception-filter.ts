@@ -1,5 +1,6 @@
 import type { ArgumentsHost, ExceptionFilter } from "@nestjs/common";
 import { Catch, HttpException, HttpStatus } from "@nestjs/common";
+import { ThrottlerException } from "@nestjs/throttler";
 // `drizzle-orm/errors` — a small, side-effect-free subpath (just the error class
 // declarations, no DB/env touching) — same reasoning as `DomainError`'s own import below for
 // why this is safe to pull straight in rather than through a barrel: nothing here eagerly
@@ -24,6 +25,11 @@ import type { ProblemDetails } from "./problem-details";
 /** RFC 9457 §4.2: "about:blank" means "no further information beyond the HTTP status". */
 const PROBLEM_TYPE = "about:blank";
 
+/** `ProblemDetails.status` is a plain `number` (it's a wire-shape interface, see
+ * `problem-details.ts`) — comparing it directly against an `HttpStatus` enum member trips
+ * `@typescript-eslint/no-unsafe-enum-comparison`, hence this pre-widened constant. */
+const TOO_MANY_REQUESTS_STATUS: number = HttpStatus.TOO_MANY_REQUESTS;
+
 /**
  * Stable `code` per HTTP status for exceptions that don't carry their own domain code
  * (domain errors from future modules will set their own, e.g. `SESSION_ALREADY_OPEN`).
@@ -45,6 +51,33 @@ function codeForStatus(status: number): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/** Header name `@nestjs/throttler`'s own `ThrottlerGuard` sets right before it throws
+ * (ULTRAPLAN 1.6, `ThrottlerGuard.handleRequest`'s `setResponseHeader(res, \`Retry-After\`,
+ * timeToBlockExpire)`, in seconds — see `docs/architecture/api-and-events.md`'s new "Rate
+ * limit" note) — SUFFIXED with `-<throttlerName>` for every throttler except one literally
+ * named `"default"` (`getThrottlerSuffix`), which none of ours are (`strictIp`,
+ * `strictIdentifier`, `moderateIp` — `modules/shared/infra/rate-limit.config.ts`). A caller
+ * shouldn't have to know our internal tier names to find the standard header, so this
+ * copies whichever suffixed one is present to the bare, standard `Retry-After` name and
+ * removes the suffixed one. */
+const RETRY_AFTER_HEADER_PATTERN = /^retry-after/i;
+
+function normalizeRetryAfterHeader(response: Response): void {
+  const suffixedHeaderName = response
+    .getHeaderNames()
+    .find((name) => RETRY_AFTER_HEADER_PATTERN.test(name) && name.toLowerCase() !== "retry-after");
+
+  if (!suffixedHeaderName) {
+    return;
+  }
+
+  const value = response.getHeader(suffixedHeaderName);
+  response.removeHeader(suffixedHeaderName);
+  if (value !== undefined) {
+    response.setHeader("Retry-After", value);
+  }
 }
 
 interface DescribedError {
@@ -122,6 +155,10 @@ export class ProblemDetailsExceptionFilter implements ExceptionFilter {
       this.logger.error({ err: sanitizeForLogging(exception) }, "Exceção não tratada");
     }
 
+    if (problem.status === TOO_MANY_REQUESTS_STATUS) {
+      normalizeRetryAfterHeader(response);
+    }
+
     response
       .status(problem.status)
       .setHeader("Content-Type", "application/problem+json")
@@ -129,6 +166,23 @@ export class ProblemDetailsExceptionFilter implements ExceptionFilter {
   }
 
   private toProblemDetails(exception: unknown): ProblemDetails {
+    // Checked BEFORE the generic `HttpException` branch below — `ThrottlerException`
+    // (ULTRAPLAN 1.6) IS one (`class ThrottlerException extends HttpException`), but its
+    // default body is just the bare string `"ThrottlerException: Too Many Requests"`
+    // (`getResponse()` returns it verbatim, no `{ message }` wrapper — see
+    // `node_modules/@nestjs/throttler/dist/throttler.exception.js`), which would otherwise
+    // surface the internal class name as both `title` and `detail` via `describe()`'s
+    // plain-string branch.
+    if (exception instanceof ThrottlerException) {
+      return {
+        type: PROBLEM_TYPE,
+        title: "Muitas requisições",
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        detail: "Você excedeu o limite de tentativas. Tente novamente mais tarde.",
+        code: "RATE_LIMITED",
+      };
+    }
+
     if (exception instanceof DomainError) {
       return this.fromDomainError(exception);
     }

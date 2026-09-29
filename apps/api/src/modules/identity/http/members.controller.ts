@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import {
   CreateInvitationInputSchema,
   type InvitationView,
@@ -7,6 +8,7 @@ import {
 } from "@neulander/contracts";
 import { createZodDto } from "nestjs-zod";
 
+import { EFFECTIVE_MODERATE_IP_LIMIT, MODERATE_IP_THROTTLER, MODERATE_WINDOW_MS } from "../../shared";
 import { InviteMemberUseCase } from "../application/invite-member.use-case";
 import type { AuthenticatedRequest } from "./guards/authenticated-request";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
@@ -15,6 +17,17 @@ import { Roles } from "./guards/roles.decorator";
 import { RolesGuard } from "./guards/roles.guard";
 
 class CreateInvitationDto extends createZodDto(CreateInvitationInputSchema) {}
+
+/** `POST /v1/orgs/:orgId/members` (ULTRAPLAN 1.6): moderate, per-IP-only tier — already
+ * authenticated + RBAC-guarded (`JwtAuthGuard`/`OrgScopeGuard`/`RolesGuard` below), so this
+ * is just a lighter anti-abuse floor, not the brute-force-grade strict tier.
+ * `ThrottlerGuard` is global now (`app.module.ts`, security-review fix nit #8) and runs
+ * BEFORE every controller/method-level guard (Nest's documented execution order: global
+ * guards, then controller-scoped, then route-scoped) — no manual ordering trick needed
+ * anymore, unlike the previous `@UseGuards(ThrottlerGuard, JwtAuthGuard, ...)` design. */
+const MODERATE_IP_THROTTLE = Throttle({
+  [MODERATE_IP_THROTTLER]: { limit: EFFECTIVE_MODERATE_IP_LIMIT, ttl: MODERATE_WINDOW_MS },
+});
 
 /**
  * `POST /v1/orgs/:orgId/members` (ULTRAPLAN 1.5, api-and-events.md: "owner, manager |
@@ -38,6 +51,7 @@ export class MembersController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, OrgScopeGuard, RolesGuard)
+  @MODERATE_IP_THROTTLE
   @Roles("owner", "manager")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Convida um novo membro (operador/gestor) por e-mail" })

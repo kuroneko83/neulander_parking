@@ -29,9 +29,43 @@ export { maskPlate, normalizePlate } from "./domain/plate";
 export { DomainEventBus, type DomainEventHandler } from "./infra/domain-events.bus";
 export { DomainEventsProcessor } from "./infra/domain-events.processor";
 export { IdempotencyInterceptor } from "./infra/idempotency.interceptor";
+// Rate limiting (ULTRAPLAN 1.6). `LoggingThrottlerGuard`/`IdentifierFailureThrottleInterceptor`
+// are registered globally (`APP_GUARD`/`APP_INTERCEPTOR` in `app.module.ts`, via
+// `useExisting` against these exact exported instances — see `shared.module.ts`'s own doc
+// comment) — exported here only so `app.module.ts` can reference them, NOT for controllers
+// to `@UseGuards()`/`@UseInterceptors()` directly anymore. `@IdentifierFailureThrottle()`
+// IS still applied per-route (it's how a route opts INTO the failure-only identifier tier
+// at all). `@Throttle()`/`@SkipThrottle()` are NOT re-exported — a controller imports those
+// two directly from `@nestjs/throttler` (a plain third-party import, like importing `zod`
+// itself), since this module doesn't wrap or alter their behavior at all.
+export {
+  IdentifierFailureThrottle,
+  IdentifierFailureThrottleInterceptor,
+} from "./infra/identifier-failure-throttle.interceptor";
+export { LoggingThrottlerGuard } from "./infra/logging-throttler.guard";
 export { OutboxService } from "./infra/outbox.service";
 export { DOMAIN_EVENTS_QUEUE, OutboxRelayProcessor } from "./infra/outbox-relay.processor";
+export {
+  DECORATOR_TIME_MULTIPLIER,
+  DEFAULT_IP_LIMIT,
+  DEFAULT_THROTTLER,
+  DEFAULT_WINDOW_MS,
+  EFFECTIVE_MODERATE_IP_LIMIT,
+  EFFECTIVE_STRICT_IP_LIMIT,
+  MODERATE_IP_LIMIT,
+  MODERATE_IP_THROTTLER,
+  MODERATE_WINDOW_MS,
+  NO_IDENTIFIER_TRACKER,
+  STRICT_IDENTIFIER_LIMIT,
+  STRICT_IDENTIFIER_THROTTLER,
+  STRICT_IP_LIMIT,
+  STRICT_IP_THROTTLER,
+  STRICT_WINDOW_MS,
+  trackByBodyField,
+  trackByParam,
+} from "./infra/rate-limit.config";
 export { CLOCK, SystemClock } from "./infra/system-clock";
+export { ThrottlerGuard } from "@nestjs/throttler";
 
 // --- module ---
 export { SharedModule } from "./shared.module";

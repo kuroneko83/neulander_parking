@@ -39,6 +39,18 @@ const REQUEST_ID_HEADER = "x-request-id";
               "req.headers.authorization",
               "req.headers.cookie",
               'req.headers["x-api-key"]',
+              // Round-2 security-review fix (LOW): without these, the raw
+              // `X-Forwarded-For`/`X-Real-IP` header (the client IP, in production — see
+              // `configure-app.ts`'s `trust proxy: 1` doc comment) was logged in the clear
+              // by every request-completed log line, ONE FIELD AWAY from
+              // `LoggingThrottlerGuard`'s own carefully-masked `warn` line (same
+              // `requestId`) — defeating that masking's whole purpose. `remoteAddress` gets
+              // a partial mask instead of full redaction (see
+              // `serializeRequestWithRedactedTokens` in `redact-opaque-tokens.ts`) — it isn't
+              // a header, and pino's path-based `redact` only supports full censoring, not
+              // a custom partial mask.
+              'req.headers["x-forwarded-for"]',
+              'req.headers["x-real-ip"]',
               "req.body.password",
               "req.body.token",
               "req.body.accessToken",

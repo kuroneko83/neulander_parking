@@ -275,6 +275,29 @@ export default [
                 },
               },
             },
+            {
+              // `configure-app.ts` importa `DECORATOR_TIME_MULTIPLIER` do arquivo puro em
+              // vez do barril `modules/shared` pelo mesmo motivo nomeado acima
+              // (`problem-details.exception-filter.ts`): o barril também exporta
+              // `SharedModule`, que avaliaria `AppConfigModule`/`DatabaseModule` (leem
+              // `process.env` no import) — `configure-app.test.ts` (ULTRAPLAN 1.6
+              // security-review fix, LOW) é um teste de unidade puro, sem `.env` carregado.
+              // `infra/rate-limit.config.ts` não importa Nest/Drizzle (só um `import type`
+              // de `AppConfigService`), então é seguro importar direto. Ver o comentário no
+              // próprio `configure-app.ts`.
+              from: {
+                element: { type: "app", path: "src", fileInternalPath: "configure-app.ts" },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: "module-layer",
+                    captured: { module: "shared", layer: "infra" },
+                    fileInternalPath: "rate-limit.config.ts",
+                  },
+                },
+              },
+            },
           ],
         },
       ],

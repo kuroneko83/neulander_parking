@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpStatus, Param, Post, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import {
   AcceptInvitationInputSchema,
   type InvitationPreview,
@@ -10,6 +11,16 @@ import type { Response } from "express";
 import { createZodDto } from "nestjs-zod";
 
 import { AppConfigService } from "../../../config/app-config.service";
+import {
+  EFFECTIVE_MODERATE_IP_LIMIT,
+  EFFECTIVE_STRICT_IP_LIMIT,
+  IdentifierFailureThrottle,
+  MODERATE_IP_THROTTLER,
+  MODERATE_WINDOW_MS,
+  STRICT_IP_THROTTLER,
+  STRICT_WINDOW_MS,
+  trackByParam,
+} from "../../shared";
 import { AcceptInvitationUseCase } from "../application/accept-invitation.use-case";
 import { GetInvitationUseCase } from "../application/get-invitation.use-case";
 
@@ -21,6 +32,25 @@ class AcceptInvitationDto extends createZodDto(AcceptInvitationInputSchema) {}
  * `AuthController`'s private constant) because `AuthController` doesn't export it — see
  * that file; not worth a shared-helper refactor for two call sites. */
 const REFRESH_TOKEN_COOKIE = "refresh_token";
+
+/** `GET /v1/invitations/:token` (ULTRAPLAN 1.6): moderate, per-IP-only tier — a public
+ * read, no account/credential is at stake, just anti-scraping. `ThrottlerGuard` is global
+ * now (`app.module.ts`) — this just overrides `moderateIp`'s otherwise-inert base up to
+ * its real number. */
+const MODERATE_IP_THROTTLE = Throttle({
+  [MODERATE_IP_THROTTLER]: { limit: EFFECTIVE_MODERATE_IP_LIMIT, ttl: MODERATE_WINDOW_MS },
+});
+
+/** `POST /v1/invitations/:token/accept` (ULTRAPLAN 1.6 — security-review finding on
+ * ULTRAPLAN 1.5: public endpoint that reaches an argon2id hash and can create an account,
+ * same protection class as login/register). Tracks the invite TOKEN itself (not an
+ * e-mail — the caller doesn't need to know which e-mail a token belongs to before
+ * presenting it) via the failure-only identifier interceptor, alongside `strictIp` —
+ * same both-trackers reasoning as `AuthController`'s strict tier. */
+const STRICT_ACCEPT_IP_THROTTLE = Throttle({
+  [STRICT_IP_THROTTLER]: { limit: EFFECTIVE_STRICT_IP_LIMIT, ttl: STRICT_WINDOW_MS },
+});
+const STRICT_ACCEPT_IDENTIFIER_THROTTLE = IdentifierFailureThrottle(trackByParam("token"));
 
 /**
  * `GET /v1/invitations/:token` and `POST /v1/invitations/:token/accept` (both public — ADR
@@ -36,6 +66,7 @@ export class InvitationsController {
   ) {}
 
   @Get(":token")
+  @MODERATE_IP_THROTTLE
   @ApiOperation({ summary: "Dados para a tela de aceite de convite (público)" })
   async getInvitation(@Param("token") token: string): Promise<InvitationPreview> {
     const preview = await this.getInvitationUseCase.execute(token);
@@ -54,6 +85,8 @@ export class InvitationsController {
    * response itself.
    */
   @Post(":token/accept")
+  @STRICT_ACCEPT_IP_THROTTLE
+  @STRICT_ACCEPT_IDENTIFIER_THROTTLE
   @ApiOperation({ summary: "Aceita um convite — cria conta se necessário (público)" })
   async accept(
     @Param("token") token: string,
